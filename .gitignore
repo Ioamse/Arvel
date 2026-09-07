@@ -1,0 +1,17 @@
+node_modules/
+android/build/
+android/app/build/
+ios/build/
+.expo/
+*.apk
+*.aab
+*.ipa
+node_modules/
+**/node_modules/
+android/build/
+android/app/build/
+ios/build/
+.expo/
+*.apk
+*.aab
+*.ipa
