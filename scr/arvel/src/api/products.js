@@ -28,6 +28,36 @@ export function getProduct(productId) {
   return request(`/products/${productId}`);
 }
 
+export function createProduct(payload) {
+  return request('/products', { method: 'POST', body: payload });
+}
+
+export function updateProduct(productId, patch) {
+  return request(`/products/${productId}`, { method: 'PATCH', body: patch });
+}
+
+export function setProductStatus(productId, status) {
+  return request(`/products/${productId}/status`, { method: 'POST', body: { status } });
+}
+
+export function addProductImage(productId, { url, position } = {}) {
+  return request(`/products/${productId}/images`, {
+    method: 'POST',
+    body: { url, position: position ?? null },
+  });
+}
+
+export function updateProductImage(productId, imageId, position) {
+  return request(`/products/${productId}/images/${imageId}`, {
+    method: 'PATCH',
+    body: { position },
+  });
+}
+
+export function deleteProductImage(productId, imageId) {
+  return request(`/products/${productId}/images/${imageId}`, { method: 'DELETE' });
+}
+
 export function getProductFacets(filters = {}) {
   const { categoryId, q, shopId, brandId, color, sizeSystem, sizeValue, condition, priceMin, priceMax } = filters;
   const query = buildQuery({

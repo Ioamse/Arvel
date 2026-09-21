@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
@@ -34,13 +34,31 @@ export default function CatalogScreen({ navigation }) {
   // брендам делаем на клиенте (см. visibleProducts ниже) поверх уже
   // загруженного списка, это заодно даёт мгновенный отклик на выбор
   // бренда, без похода в сеть.
+  const [reloadKey, setReloadKey] = useState(0);
+  const loadedAtRef = useRef(0);
+
+  // Каталог не размонтируется при уходе на другую вкладку, поэтому без
+  // перезапроса по фокусу он навсегда оставался со списком, загруженным при
+  // первом открытии, — объявление, выложенное продавцом позже, покупатель не
+  // видел до перезапуска приложения.
+  useEffect(
+    () =>
+      navigation.addListener('focus', () => {
+        if (Date.now() - loadedAtRef.current < 30 * 1000) return;
+        setReloadKey((k) => k + 1);
+      }),
+    [navigation]
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     listProducts({ categoryId })
       .then((page) => {
-        if (!cancelled) setProducts(page.data || []);
+        if (cancelled) return;
+        loadedAtRef.current = Date.now();
+        setProducts(page.data || []);
       })
       .catch((e) => {
         if (!cancelled) setError(e);
@@ -51,7 +69,7 @@ export default function CatalogScreen({ navigation }) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, reloadKey]);
 
   // Фильтрация по бренду — на клиенте (см. комментарий выше), поддерживает
   // сразу несколько выбранных брендов.

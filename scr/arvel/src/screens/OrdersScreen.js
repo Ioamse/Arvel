@@ -1,18 +1,35 @@
 // Экран «Заказы» (покупатель) / «Продажи» (продавец).
-// Открывается из плиток статистики в «Профиле».
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+// Открывается из плитки статистики в «Профиле».
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
-import { BackIcon, TeeIcon, SneakerIcon } from '../components/Icons';
+import { BackIcon, TeeIcon } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
-import { dealsHistory } from '../data/products';
+import { listMyPurchases, listMyPurchaseConfirmations } from '../api/purchases';
+import { formatPrice } from '../utils/price';
 
 export default function OrdersScreen({ navigation }) {
   const { user } = useAuth();
   const isSeller = user?.role === 'seller';
   const title = isSeller ? 'Продажи' : 'Заказы';
   const rowLabel = isSeller ? 'Продажа' : 'Покупка';
+
+  const [deals, setDeals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const fetchDeals = isSeller ? listMyPurchaseConfirmations : listMyPurchases;
+    fetchDeals({ limit: 50 })
+      .then((page) => { if (!cancelled) setDeals(page.data || []); })
+      .catch((e) => { if (!cancelled) setError(e); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isSeller]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -25,32 +42,43 @@ export default function OrdersScreen({ navigation }) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
-        {dealsHistory.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
+        ) : deals.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>
-              {isSeller ? 'Пока нет продаж' : 'Пока нет заказов'}
+              {error ? 'Не удалось загрузить' : isSeller ? 'Пока нет продаж' : 'Пока нет заказов'}
             </Text>
-            <Text style={styles.emptySub}>
-              {isSeller
-                ? 'Завершённые сделки появятся здесь.'
-                : 'Ваши покупки появятся здесь после первой сделки.'}
-            </Text>
+            {!error && (
+              <Text style={styles.emptySub}>
+                {isSeller
+                  ? 'Завершённые сделки появятся здесь.'
+                  : 'Ваши покупки появятся здесь после первой сделки.'}
+              </Text>
+            )}
           </View>
         ) : (
           <View style={styles.card}>
-            {dealsHistory.map((d, i) => {
-              const Ph = d.kind === 'sneaker' ? SneakerIcon : TeeIcon;
+            {deals.map((d, i) => {
+              const product = d.product;
+              const subtitle = [
+                rowLabel,
+                new Date(d.confirmed_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }),
+                isSeller ? d.buyer?.display_name : null,
+              ].filter(Boolean).join(' · ');
               return (
                 <View
                   key={d.id}
-                  style={[styles.dealRow, i < dealsHistory.length - 1 && styles.dealBorder]}
+                  style={[styles.dealRow, i < deals.length - 1 && styles.dealBorder]}
                 >
-                  <View style={styles.dealImg}><Ph size={36} /></View>
+                  <View style={styles.dealImg}><TeeIcon size={36} /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.dealTitle}>{d.title}</Text>
-                    <Text style={styles.dealSub}>{rowLabel} · {d.date}</Text>
+                    <Text style={styles.dealTitle} numberOfLines={1}>
+                      {[product?.brand?.name, product?.title].filter(Boolean).join(' ')}
+                    </Text>
+                    <Text style={styles.dealSub} numberOfLines={1}>{subtitle}</Text>
                   </View>
-                  <Text style={styles.dealPrice}>{d.price.toLocaleString('ru-RU')} ₽</Text>
+                  <Text style={styles.dealPrice}>{formatPrice(product?.price_minor)} ₽</Text>
                 </View>
               );
             })}

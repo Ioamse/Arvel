@@ -5,13 +5,23 @@ import { colors, spacing, radius, font } from '../theme';
 import { BackIcon } from '../components/Icons';
 import {
   listSellerInvites, createSellerInvite, revokeSellerInvite,
-  listAdminUsers, banUser, unbanUser,
+  listAdminUsers, banUser, unbanUser, getAdminOverview,
 } from '../api/admin';
 
 const TABS = [
+  { key: 'overview', label: 'Обзор' },
   { key: 'invites', label: 'Инвайты' },
   { key: 'users', label: 'Пользователи' },
 ];
+
+function StatCard({ label, value }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
 
 // SellerInviteStatus: created | used | expired | revoked (см. OpenAPI)
 const INVITE_STATUS_LABEL = {
@@ -84,7 +94,11 @@ function UserRow({ user, onToggleBan }) {
 }
 
 export default function AdminPanelScreen({ navigation }) {
-  const [tab, setTab] = useState('invites');
+  const [tab, setTab] = useState('overview');
+
+  const [overview, setOverview] = useState(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState(null);
 
   const [invites, setInvites] = useState([]);
   const [invitesLoading, setInvitesLoading] = useState(true);
@@ -112,6 +126,16 @@ export default function AdminPanelScreen({ navigation }) {
       .finally(() => setUsersLoading(false));
   }, []);
 
+  const loadOverview = useCallback(() => {
+    setOverviewLoading(true);
+    setOverviewError(null);
+    getAdminOverview()
+      .then((data) => setOverview(data))
+      .catch((e) => setOverviewError(e))
+      .finally(() => setOverviewLoading(false));
+  }, []);
+
+  useEffect(() => { loadOverview(); }, [loadOverview]);
   useEffect(() => { loadInvites(); }, [loadInvites]);
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
@@ -155,6 +179,45 @@ export default function AdminPanelScreen({ navigation }) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {tab === 'overview' && (
+          overviewLoading ? (
+            <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
+          ) : overviewError || !overview ? (
+            <Text style={styles.empty}>Не удалось загрузить статистику</Text>
+          ) : (
+            <>
+              <View style={styles.statsGrid}>
+                <StatCard label="Продавцов" value={overview.total_sellers} />
+                <StatCard label="Товаров" value={overview.total_products} />
+                <StatCard label="Пользователей" value={overview.total_users} />
+                <StatCard label="Отзывов" value={overview.total_reviews} />
+              </View>
+
+              <Text style={styles.sectionLabel}>По продавцам</Text>
+              {overview.sellers.length === 0 ? (
+                <Text style={styles.empty}>Продавцов пока нет</Text>
+              ) : (
+                <View style={styles.card}>
+                  {overview.sellers.map((s, i) => (
+                    <View key={s.seller_id}>
+                      <View style={styles.sellerRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sellerName}>{s.shop_name}</Text>
+                          <Text style={styles.sellerSub}>
+                            {s.product_count} товаров · {s.review_count} отзывов
+                            {s.avg_rating != null ? ` · ★ ${s.avg_rating.toFixed(1)}` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                      {i < overview.sellers.length - 1 && <View style={styles.rowBorder} />}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )
+        )}
+
         {tab === 'invites' && (
           <>
             <Pressable style={styles.createBtn} onPress={createInvite}>
@@ -214,6 +277,18 @@ const styles = StyleSheet.create({
   tabTextActive: { color: colors.accentText },
 
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  statCard: {
+    flexBasis: '47%', flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.md,
+    paddingVertical: spacing.md, alignItems: 'center', gap: 4,
+  },
+  statValue: { color: colors.text, fontSize: font.sizeXL, fontWeight: '800' },
+  statLabel: { color: colors.textMuted, fontSize: font.sizeSM },
+  sectionLabel: { color: colors.text, fontSize: font.sizeMD, fontWeight: '800', marginTop: spacing.lg, marginBottom: spacing.md },
+  sellerRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
+  sellerName: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
+  sellerSub: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },
 
   card: { backgroundColor: colors.surface, borderRadius: radius.md, overflow: 'hidden' },
   rowBorder: { height: 1, backgroundColor: colors.border },

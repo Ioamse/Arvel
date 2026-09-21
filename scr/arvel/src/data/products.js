@@ -97,10 +97,3 @@ export const catalogBrands = [
 // Для блоков «Популярное» и «Недавнее» на экране поиска
 export const popularBrands = ['Nike', 'Stone Island', 'Carhartt', 'Adidas', 'The North Face'];
 export const recentSearches = ['Air Max', 'Stone Island худи', 'Куртка зима'];
-
-// История сделок для профиля
-export const dealsHistory = [
-  { id: 'd1', title: 'Nike Air Max 90',       date: '14 мая', price: 8900,  kind: 'sneaker' },
-  { id: 'd2', title: 'Carhartt WIP Футболка', date: '2 мая',  price: 3200,  kind: 'tee' },
-  { id: 'd3', title: 'The North Face Куртка', date: '28 апр', price: 15900, kind: 'tee' },
-];

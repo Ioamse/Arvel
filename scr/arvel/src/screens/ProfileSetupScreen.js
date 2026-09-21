@@ -4,38 +4,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import Svg, { Path } from 'react-native-svg';
 import { colors, spacing, radius, font } from '../theme';
 import { BackIcon, UserIcon, CameraIcon, ImageIcon, CloseIcon } from '../components/Icons';
 import KeyboardAware from '../components/KeyboardAware';
-import ShieldIcon from '../components/ShieldIcon';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
-
-// Сумка для роли «Я покупатель» — как на макете
-function BagIcon({ size = 22, color = colors.accentText }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M5 8h14l-1 12H6L5 8z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M9 10V6a3 3 0 016 0v4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  );
-}
-
-function RoleRow({ active, onPress, icon, title, subtitle }) {
-  return (
-    <Pressable style={[styles.role, active && styles.roleActive]} onPress={onPress}>
-      <View style={[styles.roleIcon, active && styles.roleIconActive]}>{icon}</View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.roleTitle}>{title}</Text>
-        <Text style={styles.roleSub}>{subtitle}</Text>
-      </View>
-      <View style={[styles.radio, active && styles.radioActive]}>
-        {active && <View style={styles.radioDot} />}
-      </View>
-    </Pressable>
-  );
-}
 
 // Строка-опция внутри шторки выбора фото
 function SheetOption({ icon, label, sub, danger, onPress }) {
@@ -53,18 +26,21 @@ function SheetOption({ icon, label, sub, danger, onPress }) {
   );
 }
 
-export default function ProfileSetupScreen({ navigation }) {
-  const {
-    pendingPhone,
-    completeOnboarding, sellerAcceptInvite, sellerComplete,
-  } = useAuth();
+export default function ProfileSetupScreen({ navigation, route }) {
+  const { completeOnboarding, sellerComplete } = useAuth();
+
+  // Роль, инвайт и SMS-код приходят с предыдущих экранов: роль и инвайт
+  // выбираются на PhoneScreen (от них зависит, каким запросом отправлен код),
+  // код — на VerifyScreen. Продавец вводит код ровно один раз: раньше здесь
+  // был ещё один шаг ввода кода после accept-invite.
+  const role = route?.params?.role === 'seller' ? 'seller' : 'buyer';
+  const invite = route?.params?.invite ?? '';
+  const smsCode = route?.params?.code ?? '';
 
   // Не подставляем pendingUser.display_name сюда: бэкенд возвращает туда
   // номер телефона по умолчанию, если имя не было передано при регистрации
   // (в этом флоу его собираем только здесь) — поле должно быть пустым.
   const [name, setName] = useState('');
-  const [role, setRole] = useState('buyer');
-  const [invite, setInvite] = useState('');
   const [shopName, setShopName] = useState('');
   // Локальный превью-URI аватара. Реальная загрузка на сервер (POST
   // /media/uploads) — отдельная задача, аватар пока не сохраняется в профиле.
@@ -73,11 +49,6 @@ export default function ProfileSetupScreen({ navigation }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
-  // Продавец: после accept-invite бэкенд шлёт отдельный SMS-код именно для
-  // подтверждения продавца — показываем компактный шаг ввода кода прямо
-  // на этом же экране, не уходя на отдельный роут.
-  const [sellerOtpStep, setSellerOtpStep] = useState(false);
-  const [sellerCode, setSellerCode] = useState('');
 
   const scrollRef = useRef(null);
 
@@ -130,17 +101,8 @@ export default function ProfileSetupScreen({ navigation }) {
 
   const onAvatarPress = () => setSheetVisible(true);
 
-  // --- Код приглашения ---
-  // Токен непрозрачный и выдаётся бэкендом (см. admin.createSellerInvite) —
-  // на клиенте только убираем случайные пробелы по краям при вставке,
-  // без ограничения длины и формата. Действителен ли код на самом деле —
-  // знает только бэкенд, узнаём это по ответу accept-invite.
-
-  const inviteFilled = invite.trim().length > 0;
-
   const canSubmitForm =
-    name.trim().length > 0 && (!isSeller || (inviteFilled && shopName.trim().length > 0));
-  const canConfirmSellerCode = sellerCode.length === 4;
+    name.trim().length > 0 && (!isSeller || shopName.trim().length > 0);
 
   const submitBuyer = async () => {
     setFormError(null);
@@ -155,53 +117,26 @@ export default function ProfileSetupScreen({ navigation }) {
     }
   };
 
-  const submitSellerInvite = async () => {
-    setFormError(null);
-    setSubmitting(true);
-    try {
-      await sellerAcceptInvite(invite, pendingPhone);
-      setSellerOtpStep(true);
-    } catch (e) {
-      setFormError(e.message || 'Не удалось проверить код приглашения. Проверьте его у продавца.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const confirmSellerCode = async () => {
+  // Код из SMS до этого момента нигде не тратился — тратим его здесь, вместе
+  // с именем и названием магазина, одним POST /auth/seller/complete.
+  const submitSeller = async () => {
     setFormError(null);
     setSubmitting(true);
     try {
       await sellerComplete({
         inviteToken: invite,
-        code: sellerCode,
+        code: smsCode,
         shopName: shopName.trim(),
         displayName: name.trim(),
       });
     } catch (e) {
-      setFormError(e.message || 'Неверный код. Попробуйте ещё раз.');
-      setSellerCode('');
+      setFormError(e.message || 'Не удалось завершить регистрацию. Попробуйте ещё раз.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const onFinishPress = () => {
-    if (isSeller) {
-      if (sellerOtpStep) confirmSellerCode();
-      else submitSellerInvite();
-    } else {
-      submitBuyer();
-    }
-  };
-
-  const canFinish = isSeller
-    ? (sellerOtpStep ? canConfirmSellerCode : canSubmitForm)
-    : canSubmitForm;
-
-  const finishTitle = isSeller
-    ? (sellerOtpStep ? 'Подтвердить код' : 'Отправить код продавцу')
-    : 'Завершить';
+  const onFinishPress = () => (isSeller ? submitSeller() : submitBuyer());
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -238,94 +173,43 @@ export default function ProfileSetupScreen({ navigation }) {
           </View>
         </Pressable>
 
-        {sellerOtpStep ? (
+        <Text style={styles.label}>Введите имя</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Введите имя"
+          placeholderTextColor={colors.textFaint}
+          value={name}
+          onChangeText={setName}
+        />
+
+        {isSeller && (
           <>
-            <Text style={styles.label}>Код из SMS</Text>
-            <Text style={styles.note}>
-              Отправили код на {pendingPhone} для подтверждения продавца.
-            </Text>
-            <TextInput
-              style={[styles.input, { marginTop: spacing.sm, letterSpacing: 6, textAlign: 'center' }]}
-              placeholder="0000"
-              placeholderTextColor={colors.textFaint}
-              keyboardType="number-pad"
-              value={sellerCode}
-              onChangeText={(t) => setSellerCode(t.replace(/\D/g, '').slice(0, 4))}
-              maxLength={4}
-            />
-            {formError && <Text style={styles.error}>{formError}</Text>}
-            <Pressable onPress={() => { setSellerOtpStep(false); setSellerCode(''); setFormError(null); }}>
-              <Text style={styles.backLink}>Изменить код приглашения</Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Text style={styles.label}>Введите имя</Text>
+            <Text style={[styles.label, { marginTop: spacing.lg }]}>Название магазина</Text>
             <TextInput
               style={styles.input}
-              placeholder="Введите имя"
+              placeholder="Например, Alex Sneaker Shop"
               placeholderTextColor={colors.textFaint}
-              value={name}
-              onChangeText={setName}
+              value={shopName}
+              onChangeText={setShopName}
+              onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
             />
-
-            <Text style={[styles.label, { marginTop: spacing.lg }]}>Кто вы на ARVELL?</Text>
-
-            <RoleRow
-              active={role === 'buyer'}
-              onPress={() => setRole('buyer')}
-              icon={<BagIcon size={22} color={role === 'buyer' ? colors.accentText : colors.textMuted} />}
-              title="Я покупатель"
-              subtitle="Просматриваю и покупаю товары"
-            />
-            <RoleRow
-              active={role === 'seller'}
-              onPress={() => setRole('seller')}
-              icon={<ShieldIcon size={22} color={role === 'seller' ? colors.accentText : colors.textMuted} filled={role === 'seller'} />}
-              title="Я продавец"
-              subtitle="Только по приглашению"
-            />
-
-            {isSeller && (
-              <>
-                <Text style={[styles.label, { marginTop: spacing.lg }]}>Код приглашения</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Код приглашения от продавца"
-                  placeholderTextColor={colors.textFaint}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={invite}
-                  onChangeText={(t) => setInvite(t.trim())}
-                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
-                />
-                <Text style={styles.note}>
-                  Продавцы регистрируются только по приглашению. Код можно получить у
-                  действующего продавца ARVELL.
-                </Text>
-
-                <Text style={[styles.label, { marginTop: spacing.lg }]}>Название магазина</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Например, Alex Sneaker Shop"
-                  placeholderTextColor={colors.textFaint}
-                  value={shopName}
-                  onChangeText={setShopName}
-                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
-                />
-              </>
-            )}
-
-            {formError && <Text style={styles.error}>{formError}</Text>}
           </>
+        )}
+
+        {formError && <Text style={styles.error}>{formError}</Text>}
+        {/* Код мог протухнуть, пока заполнялась форма — даём вернуться за новым. */}
+        {isSeller && formError && (
+          <Pressable onPress={() => navigation.goBack()}>
+            <Text style={styles.backLink}>Ввести код из SMS заново</Text>
+          </Pressable>
         )}
       </ScrollView>
 
       {/* Футер внутри KeyboardAware: на Android поднимается вместе с клавиатурой */}
       <View style={styles.footer}>
         <PrimaryButton
-          title={submitting ? 'Подождите...' : finishTitle}
-          disabled={!canFinish || submitting}
+          title={submitting ? 'Подождите...' : 'Завершить'}
+          disabled={!canSubmitForm || submitting}
           onPress={onFinishPress}
         />
       </View>
@@ -425,29 +309,6 @@ const styles = StyleSheet.create({
     color: colors.accent, fontSize: font.sizeSM, fontWeight: '600',
     marginTop: spacing.lg, textAlign: 'center',
   },
-
-  role: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg, borderWidth: 1.5, borderColor: 'transparent',
-    padding: spacing.md, marginBottom: spacing.sm,
-  },
-  roleActive: { borderColor: colors.accent },
-  roleIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  roleIconActive: { backgroundColor: colors.accent },
-  roleTitle: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
-  roleSub: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },
-  radio: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  radioActive: { borderColor: colors.accent },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
 
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, paddingTop: spacing.sm },
 

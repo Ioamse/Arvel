@@ -1,16 +1,72 @@
 // Экран «Мои объявления» продавца: список его товаров + «Добавить товар».
 // Открывается из плитки статистики в «Профиле».
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
 import { BackIcon } from '../components/Icons';
 import MyListingCard from '../components/MyListingCard';
-import { useProducts } from '../context/ProductsContext';
+import { getMyShop } from '../api/me';
+import { listProducts, setProductStatus } from '../api/products';
 
 export default function MyListingsScreen({ navigation }) {
-  const { products, markSold, removeProduct } = useProducts();
-const myProducts = useMemo(() => products.filter((p) => p.mine), [products]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // GET /products?status= отдаёт только один статус за раз и только
+  // владельцу магазина — тянем active и out_of_stock отдельно и сводим в
+  // один список (archived сознательно не показываем, он скрыт из каталога).
+  const load = useCallback(async (cancelledRef) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const shop = await getMyShop();
+      const [activePage, outOfStockPage] = await Promise.all([
+        listProducts({ shopId: shop.id, status: 'active' }),
+        listProducts({ shopId: shop.id, status: 'out_of_stock' }),
+      ]);
+      if (cancelledRef?.current) return;
+      const merged = [...(activePage.data || []), ...(outOfStockPage.data || [])]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setProducts(merged);
+    } catch (e) {
+      if (!cancelledRef?.current) setError(e);
+    } finally {
+      if (!cancelledRef?.current) setLoading(false);
+    }
+  }, []);
+
+  // Экран не размонтируется при переходе на AddProduct — обновляем список
+  // при каждом возврате в фокус, а не только при первом монтировании.
+  // cancelledRef защищает от гонки, если фокус срабатывает повторно
+  // (быстрый уход и возврат) раньше, чем разрешился предыдущий load().
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    const unsubscribe = navigation.addListener('focus', () => load(cancelledRef));
+    return () => {
+      cancelledRef.current = true;
+      unsubscribe();
+    };
+  }, [navigation, load]);
+
+  const onSetStatus = async (id, status) => {
+    try {
+      await setProductStatus(id, status);
+      load();
+    } catch (e) {
+      Alert.alert('Не удалось обновить статус', e.message || 'Попробуйте ещё раз.');
+    }
+  };
+
+  const onArchive = async (id) => {
+    try {
+      await setProductStatus(id, 'archived');
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (e) {
+      Alert.alert('Не удалось скрыть объявление', e.message || 'Попробуйте ещё раз.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -29,22 +85,28 @@ const myProducts = useMemo(() => products.filter((p) => p.mine), [products]);
       </View>
 
       <FlatList
-        data={myProducts}
+        data={products}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Объявлений пока нет</Text>
-          </View>
+          loading ? (
+            <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>
+                {error ? 'Не удалось загрузить объявления' : 'Объявлений пока нет'}
+              </Text>
+            </View>
+          )
         }
         renderItem={({ item }) => (
           <MyListingCard
             product={item}
             onPress={() => navigation.navigate('Product', { id: item.id })}
-            onMarkSold={markSold}
-            onDelete={removeProduct}
+            onSetStatus={onSetStatus}
+            onArchive={onArchive}
           />
         )}
       />
@@ -72,4 +134,3 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   emptyTitle: { color: colors.text, fontSize: font.sizeLG, fontWeight: '700', textAlign: 'center' },
 });
-

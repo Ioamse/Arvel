@@ -6,18 +6,28 @@ const AppConfigContext = createContext({
   sizeSystems: [],
   colors: [],
   conditions: [],
+  maxImagesPerProduct: 5,
+  maxImageBytes: null,
+  maxImageWidth: null,
+  maxImageHeight: null,
+  allowedImageContentTypes: [],
   loading: true,
   error: null,
 });
 
 // GET /config — публичные константы платформы (валюта, размеры, цвета,
-// состояния). Грузится один раз при старте, не ждёт авторизации.
+// состояния, лимиты изображений). Грузится один раз при старте, не ждёт авторизации.
 export function AppConfigProvider({ children }) {
   const [state, setState] = useState({
     currency: null,
     sizeSystems: [],
     colors: [],
     conditions: [],
+    maxImagesPerProduct: 5,
+    maxImageBytes: null,
+    maxImageWidth: null,
+    maxImageHeight: null,
+    allowedImageContentTypes: [],
     loading: true,
     error: null,
   });
@@ -32,6 +42,11 @@ export function AppConfigProvider({ children }) {
           sizeSystems: config.size_systems || [],
           colors: config.colors || [],
           conditions: config.conditions || [],
+          maxImagesPerProduct: config.max_images_per_product ?? 5,
+          maxImageBytes: config.max_image_bytes ?? null,
+          maxImageWidth: config.max_image_width ?? null,
+          maxImageHeight: config.max_image_height ?? null,
+          allowedImageContentTypes: config.allowed_image_content_types || [],
           loading: false,
           error: null,
         });

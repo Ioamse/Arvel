@@ -16,7 +16,14 @@ const RESEND_SECONDS = 30;
 // не может появиться на экране ни на мгновение.
 export default function VerifyScreen({ navigation, route }) {
   const phone = route?.params?.phone ?? '+7 (999) 000-00-00';
-  const { verifyCode, registerPhone, pendingPhone } = useAuth();
+  // Продавец приходит сюда после POST /auth/seller/accept-invite — у него
+  // свой SMS-код, который тратится только в POST /auth/seller/complete.
+  // Поэтому здесь его не проверяем (проверять нечем: отдельного эндпоинта
+  // нет, а /auth/verify — код другого флоу), а передаём дальше вместе с
+  // инвайтом. Имя и магазин соберёт ProfileSetup и завершит регистрацию.
+  const isSeller = route?.params?.role === 'seller';
+  const invite = route?.params?.invite ?? null;
+  const { verifyCode, registerPhone, sellerAcceptInvite, pendingPhone } = useAuth();
   const [value, setValue] = useState('');
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
   const [verifying, setVerifying] = useState(false);
@@ -43,8 +50,12 @@ export default function VerifyScreen({ navigation, route }) {
     setError(null);
 
     if (digits.length === LEN) {
-      setVerifying(true);
       hidden.current?.blur();
+      if (isSeller) {
+        navigation.navigate('ProfileSetup', { role: 'seller', invite, code: digits });
+        return;
+      }
+      setVerifying(true);
       verifyCode(digits)
         .then(() => navigation.navigate('ProfileSetup'))
         .catch((e) => {
@@ -58,7 +69,13 @@ export default function VerifyScreen({ navigation, route }) {
   const resend = () => {
     if (!pendingPhone) return;
     setSeconds(RESEND_SECONDS);
-    registerPhone(pendingPhone).catch(() => {});
+    // Повторная отправка должна идти тем же флоу, что и первая, иначе
+    // продавцу прилетит код от register, который /auth/seller/complete
+    // не примет.
+    const again = isSeller
+      ? sellerAcceptInvite(invite, pendingPhone)
+      : registerPhone(pendingPhone);
+    again.catch(() => {});
   };
 
   return (

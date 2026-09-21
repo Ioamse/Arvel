@@ -1,38 +1,47 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { colors, spacing, radius, font } from '../theme';
-import { CheckCircle, TeeIcon, SneakerIcon, TrashIcon } from './Icons';
+import { CheckCircle, TeeIcon, TrashIcon } from './Icons';
 import ConfirmDialog from './ConfirmDialog';
+import { formatPrice } from '../utils/price';
+import { resolveMediaUrl } from '../utils/media';
 
-export default function MyListingCard({ product, onPress, onMarkSold, onDelete }) {
+export default function MyListingCard({ product, onPress, onSetStatus, onArchive }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
-  const Placeholder = product.kind === 'sneaker' ? SneakerIcon : TeeIcon;
-  const sold = product.status === 'sold';
+  // Модели "sold"/"delete" в бэкенде нет: жизненный цикл товара — это
+  // active <-> out_of_stock, либо необратимо archived (скрыт, но хранится
+  // для истории). "Продано" здесь — out_of_stock, "удалить" — archived.
+  const outOfStock = product.status === 'out_of_stock';
+  const photoUrl = resolveMediaUrl(product.thumbnail_url);
 
-  const askDelete = () => {
+  const askArchive = () => {
     setMenuOpen(false);
     setConfirmVisible(true);
   };
 
   return (
-    <Pressable style={[styles.card, sold && styles.cardSold]} onPress={onPress}>
+    <Pressable style={[styles.card, outOfStock && styles.cardSold]} onPress={onPress}>
       <View style={styles.imageWrap}>
-        <Placeholder size={90} />
+        {photoUrl ? (
+          <Image source={{ uri: photoUrl }} style={styles.image} resizeMode="cover" />
+        ) : (
+          <TeeIcon size={90} />
+        )}
       </View>
 
       <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, sold ? styles.statusBadgeSold : styles.statusBadgeActive]}>
-          <Text style={[styles.statusText, sold ? styles.statusTextSold : styles.statusTextActive]}>
-            {sold ? 'Продано' : 'Активно'}
+        <View style={[styles.statusBadge, outOfStock ? styles.statusBadgeSold : styles.statusBadgeActive]}>
+          <Text style={[styles.statusText, outOfStock ? styles.statusTextSold : styles.statusTextActive]}>
+            {outOfStock ? 'Продано' : 'Активно'}
           </Text>
         </View>
       </View>
 
       <View style={styles.info}>
-        <Text style={styles.brand} numberOfLines={1}>{product.brand}</Text>
+        <Text style={styles.brand} numberOfLines={1}>{product.brand?.name || 'Без бренда'}</Text>
         <Text style={styles.title} numberOfLines={1}>{product.title}</Text>
-        <Text style={styles.price}>{product.price.toLocaleString('ru-RU')} ₽</Text>
+        <Text style={styles.price}>{formatPrice(product.price_minor)} ₽</Text>
       </View>
 
       <View style={styles.menuWrap}>
@@ -42,18 +51,16 @@ export default function MyListingCard({ product, onPress, onMarkSold, onDelete }
 
         {menuOpen && (
           <View style={styles.dropdown}>
-            {!sold && (
-              <Pressable
-                style={[styles.dropdownItem, styles.dropdownItemBorder]}
-                onPress={() => { setMenuOpen(false); onMarkSold(product.id); }}
-              >
-                <CheckCircle size={16} />
-                <Text style={styles.dropdownText}>Отметить проданным</Text>
-              </Pressable>
-            )}
-            <Pressable style={styles.dropdownItem} onPress={askDelete}>
+            <Pressable
+              style={[styles.dropdownItem, styles.dropdownItemBorder]}
+              onPress={() => { setMenuOpen(false); onSetStatus(product.id, outOfStock ? 'active' : 'out_of_stock'); }}
+            >
+              <CheckCircle size={16} />
+              <Text style={styles.dropdownText}>{outOfStock ? 'Вернуть в продажу' : 'Отметить проданным'}</Text>
+            </Pressable>
+            <Pressable style={styles.dropdownItem} onPress={askArchive}>
               <TrashIcon size={16} color={colors.danger} />
-              <Text style={[styles.dropdownText, styles.dropdownTextDanger]}>Удалить объявление</Text>
+              <Text style={[styles.dropdownText, styles.dropdownTextDanger]}>Скрыть объявление</Text>
             </Pressable>
           </View>
         )}
@@ -61,12 +68,12 @@ export default function MyListingCard({ product, onPress, onMarkSold, onDelete }
 
       <ConfirmDialog
         visible={confirmVisible}
-        title="Удалить объявление?"
-        message="Это действие необратимо."
-        confirmText="Удалить"
+        title="Скрыть объявление?"
+        message="Товар будет скрыт из каталога и переведён в архив. Вернуть его в продажу будет нельзя."
+        confirmText="Скрыть"
         cancelText="Отмена"
         onCancel={() => setConfirmVisible(false)}
-        onConfirm={() => { setConfirmVisible(false); onDelete(product.id); }}
+        onConfirm={() => { setConfirmVisible(false); onArchive(product.id); }}
       />
     </Pressable>
   );
@@ -90,6 +97,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  image: { width: '100%', height: '100%' },
 
   statusRow: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   statusBadge: {

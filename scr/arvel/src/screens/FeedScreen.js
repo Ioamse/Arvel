@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, font } from '../theme';
@@ -6,7 +6,15 @@ import ProductCard from '../components/ProductCard';
 import { useProducts } from '../context/ProductsContext';
 
 export default function FeedScreen({ navigation }) {
-  const { products, loading, error, refresh } = useProducts();
+  const { products, loading, error, refresh, refreshIfStale } = useProducts();
+
+  // Объявление, выложенное продавцом (в т.ч. с другого аккаунта или
+  // устройства), появляется в ленте при возврате на вкладку, а не только
+  // после pull-to-refresh или перезапуска приложения.
+  useEffect(
+    () => navigation.addListener('focus', refreshIfStale),
+    [navigation, refreshIfStale]
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -22,6 +30,8 @@ export default function FeedScreen({ navigation }) {
         numColumns={2}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshing={loading}
+        onRefresh={refresh}
         renderItem={({ item }) => (
           <ProductCard product={item} onPress={() => navigation.navigate('Product', { id: item.id })} />
         )}
