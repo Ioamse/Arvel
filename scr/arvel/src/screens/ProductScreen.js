@@ -5,15 +5,15 @@ import { colors, spacing, radius, font } from '../theme';
 import { BackIcon, ShareIcon, StarIcon, ChatIcon, HeartIcon, TeeIcon } from '../components/Icons';
 import { getProduct } from '../api/products';
 import { useFavorites } from '../context/FavoritesContext';
-import { useAppConfig, labelFor } from '../context/AppConfigContext';
+import { useAppConfig, useMoney, labelFor } from '../context/AppConfigContext';
 import { useAuth } from '../context/AuthContext';
-import { formatPrice } from '../utils/price';
 import { resolveMediaUrl } from '../utils/media';
 
 export default function ProductScreen({ navigation, route }) {
   const id = route?.params?.id;
   const { isFavorite, toggleFavorite } = useFavorites();
   const { conditions } = useAppConfig();
+  const money = useMoney();
   const { isLoggedIn } = useAuth();
 
   // Покупка и переписка с продавцом доступны только вошедшим — гостя
@@ -150,7 +150,7 @@ export default function ProductScreen({ navigation, route }) {
             )}
           </View>
 
-          <Text style={styles.price}>{formatPrice(product.price_minor)} ₽</Text>
+          <Text style={styles.price}>{money.formatMinor(product.price_minor)}</Text>
 
           <View style={styles.specs}>
             <View style={styles.specBox}>
@@ -182,7 +182,14 @@ export default function ProductScreen({ navigation, route }) {
                 })}
               >
                 <View style={styles.sellerAvatar}>
-                  <Text style={styles.sellerInitial}>{shop.shop_name?.[0] ?? '?'}</Text>
+                  {shop.profile_pic_url ? (
+                    <Image
+                      source={{ uri: resolveMediaUrl(shop.profile_pic_url) }}
+                      style={styles.sellerAvatarImage}
+                    />
+                  ) : (
+                    <Text style={styles.sellerInitial}>{shop.shop_name?.[0] ?? '?'}</Text>
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sellerName}>{shop.shop_name}</Text>
@@ -255,7 +262,9 @@ const styles = StyleSheet.create({
     width: 52, height: 52, borderRadius: 26,
     borderWidth: 2, borderColor: colors.accent,
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  sellerAvatarImage: { width: 48, height: 48 },
   sellerInitial: { color: colors.accent, fontSize: font.sizeLG, fontWeight: '800' },
   sellerName: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
   sellerDeals: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },

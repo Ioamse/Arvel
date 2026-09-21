@@ -1,16 +1,26 @@
 // Экран «Мои объявления» продавца: список его товаров + «Добавить товар».
 // Открывается из плитки статистики в «Профиле».
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
 import { BackIcon } from '../components/Icons';
 import MyListingCard from '../components/MyListingCard';
-import { useProducts } from '../context/ProductsContext';
+import { useMyListings } from '../context/MyListingsContext';
 
 export default function MyListingsScreen({ navigation }) {
-  const { products, markSold, removeProduct } = useProducts();
-const myProducts = useMemo(() => products.filter((p) => p.mine), [products]);
+  const { items, loading, error, refresh, markSold, archive } = useMyListings();
+
+  // Список живёт на сервере — при каждом заходе на экран обновляем его,
+  // чтобы видеть изменения, сделанные с другого устройства.
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+
+  const run = (action, id) => {
+    action(id).catch((e) => {
+      Alert.alert('Не удалось выполнить действие', e?.message || 'Попробуйте ещё раз.');
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -29,22 +39,36 @@ const myProducts = useMemo(() => products.filter((p) => p.mine), [products]);
       </View>
 
       <FlatList
-        data={myProducts}
+        data={items}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshing={loading && items.length > 0}
+        onRefresh={refresh}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Объявлений пока нет</Text>
+            {loading ? (
+              <ActivityIndicator color={colors.accent} size="large" />
+            ) : error ? (
+              <>
+                <Text style={styles.emptyTitle}>Не удалось загрузить объявления</Text>
+                <Text style={styles.emptySub}>{error.message}</Text>
+                <Pressable style={styles.retryBtn} onPress={refresh}>
+                  <Text style={styles.retryText}>Повторить</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={styles.emptyTitle}>Объявлений пока нет</Text>
+            )}
           </View>
         }
         renderItem={({ item }) => (
           <MyListingCard
             product={item}
             onPress={() => navigation.navigate('Product', { id: item.id })}
-            onMarkSold={markSold}
-            onDelete={removeProduct}
+            onMarkSold={(id) => run(markSold, id)}
+            onDelete={(id) => run(archive, id)}
           />
         )}
       />
@@ -71,5 +95,11 @@ const styles = StyleSheet.create({
 
   empty: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   emptyTitle: { color: colors.text, fontSize: font.sizeLG, fontWeight: '700', textAlign: 'center' },
+  emptySub: { color: colors.textMuted, fontSize: font.sizeSM, textAlign: 'center', marginTop: spacing.sm },
+  retryBtn: {
+    marginTop: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+  },
+  retryText: { color: colors.accent, fontSize: font.sizeMD, fontWeight: '700' },
 });
 

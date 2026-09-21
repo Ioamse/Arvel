@@ -11,11 +11,11 @@ import {
 } from '../components/Icons';
 import KeyboardAware from '../components/KeyboardAware';
 import ZoomableImage from '../components/ZoomableImage';
-import { formatPrice } from '../utils/price';
-import { useAppConfig, labelFor } from '../context/AppConfigContext';
+import { useAppConfig, useMoney, labelFor } from '../context/AppConfigContext';
 
 export default function ConversationScreen({ navigation, route }) {
   const { conditions } = useAppConfig();
+  const money = useMoney();
   const name = route?.params?.name || 'Алексей';
   const rating = route?.params?.rating ?? 4.9;
   const phone = route?.params?.phone || null;
@@ -32,7 +32,7 @@ export default function ConversationScreen({ navigation, route }) {
   const sizeLabel = product ? (product.size_value || product.size || (product.size_system === 'one_size' ? 'One size' : '—')) : '';
   const conditionLabel = product ? (product.price_minor != null ? labelFor(conditions, product.condition) : product.condition) : '';
   const priceLabel = product
-    ? (product.price_minor != null ? formatPrice(product.price_minor) : (product.price?.toLocaleString('ru-RU') ?? '—'))
+    ? (product.price_minor != null ? money.formatMinor(product.price_minor) : (product.price != null ? money.formatMajor(product.price) : '—'))
     : '';
 
   // Поле ввода начинается пустым — без заготовленной фразы
@@ -140,7 +140,7 @@ export default function ConversationScreen({ navigation, route }) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.productTitle}>{brandLabel} {product.title}</Text>
                   <Text style={styles.productSub}>{sizeLabel} · {conditionLabel}</Text>
-                  <Text style={styles.productPrice}>{priceLabel} ₽</Text>
+                  <Text style={styles.productPrice}>{priceLabel}</Text>
                 </View>
               </View>
               <View style={styles.statusBar}>

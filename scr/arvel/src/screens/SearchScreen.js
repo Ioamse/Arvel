@@ -7,7 +7,7 @@ import ProductCard from '../components/ProductCard';
 import { listProducts } from '../api/products';
 import { listBrands } from '../api/catalog';
 import { useProducts } from '../context/ProductsContext';
-import { formatPrice } from '../utils/price';
+import { useMoney } from '../context/AppConfigContext';
 
 // «Недавнее» — пока только локальный список без сохранения между сессиями,
 // в спеке нет эндпоинта под историю поиска.
@@ -15,6 +15,7 @@ const INITIAL_RECENT = ['Air Max', 'Stone Island худи', 'Куртка зим
 
 export default function SearchScreen({ navigation }) {
   const { products: feedProducts } = useProducts();
+  const money = useMoney();
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState(INITIAL_RECENT);
   const [popularBrands, setPopularBrands] = useState([]);
@@ -22,6 +23,7 @@ export default function SearchScreen({ navigation }) {
 
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
   useEffect(() => {
     listBrands({ limit: 5 })
@@ -36,13 +38,20 @@ export default function SearchScreen({ navigation }) {
       return;
     }
     setSearching(true);
+    setSearchError(false);
+    // cancelled: ответ на прежний запрос («ab») не должен перезаписать
+    // результаты нового («abc»), если он пришёл позже.
+    let cancelled = false;
     const t = setTimeout(() => {
       listProducts({ q })
-        .then((page) => setResults(page.data || []))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
+        .then((page) => { if (!cancelled) setResults(page.data || []); })
+        .catch(() => { if (!cancelled) { setResults([]); setSearchError(true); } })
+        .finally(() => { if (!cancelled) setSearching(false); });
     }, 350);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [query]);
 
   const removeRecent = (item) => setRecent((r) => r.filter((x) => x !== item));
@@ -83,7 +92,7 @@ export default function SearchScreen({ navigation }) {
           ListEmptyComponent={
             searching
               ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
-              : <Text style={styles.empty}>Ничего не найдено</Text>
+              : <Text style={styles.empty}>{searchError ? 'Не удалось выполнить поиск. Проверьте соединение.' : 'Ничего не найдено'}</Text>
           }
         />
       ) : (
@@ -133,7 +142,7 @@ export default function SearchScreen({ navigation }) {
                   {typeof p.brand === 'string' ? p.brand : p.brand?.name || ''}
                 </Text>
                 <Text style={styles.forYouPrice}>
-                  {p.price_minor != null ? formatPrice(p.price_minor) : (p.price?.toLocaleString('ru-RU') ?? '—')} ₽
+                  {p.price_minor != null ? money.formatMinor(p.price_minor) : (p.price != null ? money.formatMajor(p.price) : '—')}
                 </Text>
               </Pressable>
             ))}

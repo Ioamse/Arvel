@@ -1,21 +1,64 @@
 // Экран редактирования профиля.
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, Alert, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useAppConfig } from '../context/AppConfigContext';
+import { uploadImage } from '../api/media';
+import { updateMyShop } from '../api/shops';
+import { toUploadAsset, imageProblem } from '../utils/imageUpload';
+import { resolveMediaUrl } from '../utils/media';
 
 export default function EditProfileScreen({ navigation }) {
   const { user, updateProfile } = useAuth();
+  const { allowedImageTypes, maxImageBytes } = useAppConfig();
   const [fullName, setFullName] = useState(user?.name || '');
   const [saving, setSaving] = useState(false);
+  // Новый аватар, выбранный на этом экране, { uri, contentType, filename }.
+  // Пока не нажали «Сохранить», на сервер ничего не уходит.
+  const [newAvatar, setNewAvatar] = useState(null);
 
   const initial = fullName.trim().charAt(0).toUpperCase() || 'A';
+  const avatarUri = newAvatar?.uri || resolveMediaUrl(user?.profile_pic_url);
+  const isSeller = user?.role === 'seller';
+
+  const pickAvatar = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Нет доступа к фото', 'Разрешите доступ к галерее в настройках, чтобы выбрать аватар.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (res.canceled) return;
+    const asset = res.assets[0];
+    const problem = imageProblem(asset, { allowedTypes: allowedImageTypes, maxBytes: maxImageBytes });
+    if (problem) {
+      Alert.alert('Это фото не подходит', problem);
+      return;
+    }
+    setNewAvatar(toUploadAsset(asset));
+  };
 
   const onSave = async () => {
     setSaving(true);
     try {
-      await updateProfile({ display_name: fullName.trim() });
+      const patch = { display_name: fullName.trim() };
+      let profilePicUrl = null;
+      if (newAvatar) {
+        profilePicUrl = await uploadImage(newAvatar);
+        patch.profile_pic_url = profilePicUrl;
+      }
+      await updateProfile(patch);
+      // Продавцу это же фото показываем как логотип магазина (seller.profile_pic_url
+      // на карточке товара берётся из магазина, а не из профиля).
+      if (profilePicUrl && isSeller) await updateMyShop({ profile_pic_url: profilePicUrl });
       navigation.goBack();
     } catch (e) {
       Alert.alert('Не удалось сохранить', e.message || 'Попробуйте ещё раз.');
@@ -37,10 +80,14 @@ export default function EditProfileScreen({ navigation }) {
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.avatarBlock}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initial}</Text>
-            </View>
-            <TouchableOpacity style={styles.cameraBadge}>
+            <TouchableOpacity style={styles.avatar} activeOpacity={0.8} onPress={pickAvatar}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{initial}</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cameraBadge} onPress={pickAvatar}>
               <Text style={styles.cameraIcon}>📷</Text>
             </TouchableOpacity>
           </View>
@@ -92,6 +139,7 @@ const styles = StyleSheet.create({
   avatarBlock: { alignSelf: 'center', marginVertical: 20 },
   avatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: 'rgba(255,255,255,0.5)', fontSize: 48, fontWeight: '600' },
+  avatarImage: { width: 110, height: 110, borderRadius: 55 },
   cameraBadge: { position: 'absolute', right: 2, bottom: 2, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, justifyContent: 'center', alignItems: 'center' },
   cameraIcon: { fontSize: 15 },
   label: { color: colors.textMuted, fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 20 },

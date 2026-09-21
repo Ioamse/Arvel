@@ -67,13 +67,43 @@ async function parseError(res) {
 // request() below, and request() calls this on 401, so importing auth.js
 // here would create a cycle.
 async function rawRefresh() {
-  const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!res.ok) throw await parseError(res);
-  return res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw await parseError(res);
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Одно обновление токенов на всех одновременных запросов. Refresh-токен по
+// спеке одноразовый: когда при истёкшем access-токене стартуют сразу
+// несколько запросов (лента, /me, избранное), каждый шёл в /auth/refresh со
+// старым токеном — второй и следующие получали «повторное использование»,
+// сервер отзывал сессию и человека выкидывало на экран входа.
+let refreshInFlight = null;
+
+function refreshSession() {
+  if (!refreshInFlight) {
+    const usedRefreshToken = refreshToken;
+    refreshInFlight = (async () => {
+      const pair = await rawRefresh();
+      // Пока шёл запрос, пользователь мог выйти или войти под другим
+      // аккаунтом — тогда чужие токены поверх новой сессии не пишем.
+      if (refreshToken !== usedRefreshToken) return;
+      await setSession({ accessToken: pair.access_token, refreshToken: pair.refresh_token });
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 export function buildQuery(params = {}) {
@@ -88,7 +118,8 @@ export async function request(path, { method = 'GET', body, auth = true, retry =
   if (!hydrated) await hydrateSession();
 
   const headers = { 'Content-Type': 'application/json' };
-  if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const usedToken = auth ? accessToken : null;
+  if (usedToken) headers.Authorization = `Bearer ${usedToken}`;
 
   // Без таймаута недоступный/заблокированный хост (например ATS на iOS или
   // сервер за NAT в другой сети) подвешивал fetch на неопределённое время —
@@ -114,16 +145,28 @@ export async function request(path, { method = 'GET', body, auth = true, retry =
     clearTimeout(timeout);
   }
 
+  // Пока запрос был в полёте, пользователь мог войти под другим аккаунтом.
+  // 401 относится к старому токену — не рефрешим и не сбрасываем новую
+  // сессию: повторяем запрос с актуальным токеном (или отдаём ошибку).
+  if (res.status === 401 && auth && usedToken && accessToken && accessToken !== usedToken) {
+    if (retry) return request(path, { method, body, auth, retry: false });
+    throw await parseError(res);
+  }
+
   if (res.status === 401 && auth && retry && refreshToken) {
     try {
-      const pair = await rawRefresh();
-      await setSession({ accessToken: pair.access_token, refreshToken: pair.refresh_token });
-      return request(path, { method, body, auth, retry: false });
+      await refreshSession();
     } catch (e) {
-      await clearSession();
-      onSessionExpired?.();
+      // Выходим, только если сервер сам отверг refresh-токен. Обрыв сети,
+      // таймаут или 5xx — не повод разлогинивать: токены целы, запрос можно
+      // повторить позже.
+      if (e.status === 400 || e.status === 401 || e.status === 403) {
+        await clearSession();
+        onSessionExpired?.();
+      }
       throw e;
     }
+    return request(path, { method, body, auth, retry: false });
   }
 
   if (res.status === 401 && auth) {

@@ -5,7 +5,7 @@ import { colors, spacing, radius, font } from '../theme';
 import { HeartIcon, TeeIcon, SneakerIcon } from './Icons';
 import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
-import { formatPrice } from '../utils/price';
+import { useMoney } from '../context/AppConfigContext';
 import { resolveMediaUrl } from '../utils/media';
 
 // Товар приходит в одной из двух форм: реальный ProductSummary с бэкенда
@@ -17,19 +17,22 @@ function getBrandLabel(product) {
   return typeof product.brand === 'string' ? product.brand : product.brand?.name || '';
 }
 
-function getPriceLabel(product) {
-  if (product.price_minor != null) return formatPrice(product.price_minor);
-  if (product.price != null) return product.price.toLocaleString('ru-RU');
+function getPriceLabel(product, money) {
+  if (product.price_minor != null) return money.formatMinor(product.price_minor);
+  if (product.price != null) return money.formatMajor(product.price);
   return '—';
 }
 
 export default function ProductCard({ product, onPress }) {
+  const money = useMoney();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { isLoggedIn } = useAuth();
   const navigation = useNavigation();
   const liked = isFavorite(product.id);
   const Placeholder = product.kind === 'sneaker' ? SneakerIcon : TeeIcon;
-  const imageUrl = resolveMediaUrl(product.thumbnail_url);
+  // В избранное с экрана товара попадает полный Product (там images[]), а не
+  // ProductSummary с thumbnail_url — иначе в списке избранного не было фото.
+  const imageUrl = resolveMediaUrl(product.thumbnail_url ?? product.images?.[0]?.url);
 
   const onLikePress = () => {
     if (!isLoggedIn) {
@@ -66,7 +69,7 @@ export default function ProductCard({ product, onPress }) {
       <View style={styles.info}>
         <Text style={styles.brand} numberOfLines={1}>{getBrandLabel(product)}</Text>
         <Text style={styles.title} numberOfLines={1}>{product.title}</Text>
-        <Text style={styles.price}>{getPriceLabel(product)} ₽</Text>
+        <Text style={styles.price}>{getPriceLabel(product, money)}</Text>
       </View>
     </Pressable>
   );

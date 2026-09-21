@@ -28,6 +28,16 @@ export function getProduct(productId) {
   return request(`/products/${productId}`);
 }
 
+// Только для продавца. body — CreateProductRequest (snake_case, цена в price_minor).
+export function createProduct(body) {
+  return request('/products', { method: 'POST', body });
+}
+
+// Жизненный цикл: active <-> out_of_stock, и любой -> archived.
+export function setProductStatus(productId, status) {
+  return request(`/products/${productId}/status`, { method: 'POST', body: { status } });
+}
+
 export function getProductFacets(filters = {}) {
   const { categoryId, q, shopId, brandId, color, sizeSystem, sizeValue, condition, priceMin, priceMax } = filters;
   const query = buildQuery({

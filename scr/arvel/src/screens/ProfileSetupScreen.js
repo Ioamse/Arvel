@@ -11,6 +11,9 @@ import KeyboardAware from '../components/KeyboardAware';
 import ShieldIcon from '../components/ShieldIcon';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
+import { useAppConfig } from '../context/AppConfigContext';
+import { uploadImage } from '../api/media';
+import { toUploadAsset, imageProblem } from '../utils/imageUpload';
 
 // Сумка для роли «Я покупатель» — как на макете
 function BagIcon({ size = 22, color = colors.accentText }) {
@@ -58,6 +61,7 @@ export default function ProfileSetupScreen({ navigation }) {
     pendingPhone,
     completeOnboarding, sellerAcceptInvite, sellerComplete,
   } = useAuth();
+  const { allowedImageTypes, maxImageBytes } = useAppConfig();
 
   // Не подставляем pendingUser.display_name сюда: бэкенд возвращает туда
   // номер телефона по умолчанию, если имя не было передано при регистрации
@@ -66,9 +70,12 @@ export default function ProfileSetupScreen({ navigation }) {
   const [role, setRole] = useState('buyer');
   const [invite, setInvite] = useState('');
   const [shopName, setShopName] = useState('');
-  // Локальный превью-URI аватара. Реальная загрузка на сервер (POST
-  // /media/uploads) — отдельная задача, аватар пока не сохраняется в профиле.
+  // Выбранный аватар { uri, contentType, filename }. На сервер он уходит при
+  // отправке формы (uploadAvatar ниже), а не в момент выбора.
   const [avatar, setAvatar] = useState(null);
+  // Уже загруженный файл, чтобы повторная попытка (неверный код продавца и т.п.)
+  // не заливала то же фото заново.
+  const uploadedAvatarRef = useRef(null);
   const [sheetVisible, setSheetVisible] = useState(false); // шторка выбора фото
 
   const [submitting, setSubmitting] = useState(false);
@@ -82,6 +89,33 @@ export default function ProfileSetupScreen({ navigation }) {
   const scrollRef = useRef(null);
 
   const isSeller = role === 'seller';
+
+  const chooseAvatar = (asset) => {
+    const problem = imageProblem(asset, { allowedTypes: allowedImageTypes, maxBytes: maxImageBytes });
+    if (problem) {
+      Alert.alert('Это фото не подходит', problem);
+      return;
+    }
+    setAvatar(toUploadAsset(asset));
+  };
+
+  // Возвращает публичный URL загруженного аватара или null. Сбой загрузки не
+  // блокирует регистрацию: человек предупреждён и может добавить фото позже.
+  const uploadAvatar = async () => {
+    if (!avatar) return null;
+    if (uploadedAvatarRef.current?.uri === avatar.uri) return uploadedAvatarRef.current.url;
+    try {
+      const url = await uploadImage(avatar);
+      uploadedAvatarRef.current = { uri: avatar.uri, url };
+      return url;
+    } catch (e) {
+      Alert.alert(
+        'Фото не загрузилось',
+        `${e?.message || 'Ошибка загрузки.'}\nРегистрация продолжится без фото — добавить его можно позже в профиле.`
+      );
+      return null;
+    }
+  };
 
   // --- Аватар ---
 
@@ -100,7 +134,7 @@ export default function ProfileSetupScreen({ navigation }) {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!res.canceled) setAvatar(res.assets[0].uri);
+    if (!res.canceled) chooseAvatar(res.assets[0]);
   };
 
   const takePhoto = async () => {
@@ -117,7 +151,7 @@ export default function ProfileSetupScreen({ navigation }) {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!res.canceled) setAvatar(res.assets[0].uri);
+    if (!res.canceled) chooseAvatar(res.assets[0]);
   };
 
   // Закрываем шторку и после закрытия запускаем действие.
@@ -146,7 +180,11 @@ export default function ProfileSetupScreen({ navigation }) {
     setFormError(null);
     setSubmitting(true);
     try {
-      await completeOnboarding({ display_name: name.trim() });
+      const profilePicUrl = await uploadAvatar();
+      await completeOnboarding({
+        display_name: name.trim(),
+        ...(profilePicUrl ? { profile_pic_url: profilePicUrl } : {}),
+      });
       // isLoggedIn переключится в контексте — RootNavigator сам уйдёт на MainTabs.
     } catch (e) {
       setFormError(e.message || 'Не удалось сохранить профиль. Попробуйте ещё раз.');
@@ -172,11 +210,15 @@ export default function ProfileSetupScreen({ navigation }) {
     setFormError(null);
     setSubmitting(true);
     try {
+      // Токены после /auth/verify уже рабочие, так что presign доступен ещё
+      // до sellerComplete; фото магазина/профиля бэкенд ждёт только после него.
+      const profilePicUrl = await uploadAvatar();
       await sellerComplete({
         inviteToken: invite,
         code: sellerCode,
         shopName: shopName.trim(),
         displayName: name.trim(),
+        profilePicUrl,
       });
     } catch (e) {
       setFormError(e.message || 'Неверный код. Попробуйте ещё раз.');
@@ -227,7 +269,7 @@ export default function ProfileSetupScreen({ navigation }) {
         {/* Аватар по центру с жёлтым бейджем камеры */}
         <Pressable style={styles.avatarWrap} onPress={onAvatarPress}>
           {avatar ? (
-            <Image source={{ uri: avatar }} style={styles.avatarImage} />
+            <Image source={{ uri: avatar.uri }} style={styles.avatarImage} />
           ) : (
             <View style={styles.avatar}>
               <UserIcon size={44} color={colors.textMuted} />

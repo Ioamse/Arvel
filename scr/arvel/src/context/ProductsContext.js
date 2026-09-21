@@ -9,9 +9,6 @@ const ProductsContext = createContext({
   hasMore: false,
   refresh: () => {},
   loadMore: () => {},
-  addProduct: () => {},
-  markSold: () => {},
-  removeProduct: () => {},
 });
 
 export function ProductsProvider({ children }) {
@@ -76,35 +73,11 @@ export function ProductsProvider({ children }) {
     refresh();
   }, [refresh]);
 
-  // --- Локальные операции продавца (создание/отметка/удаление) ---
-  // Пока работают только поверх уже загруженного списка в памяти — реальные
-  // POST /products и POST /products/{id}/status подключаются в Phase 2
-  // вместе с переработкой AddProductScreen/MyListingCard. Не переживают
-  // перезапуск приложения и не долетают до бэкенда.
-  const addProduct = useCallback((data) => {
-    const newProduct = {
-      id: 'local-' + Date.now(),
-      liked: false,
-      rating: 5.0,
-      mine: true, // товар, добавленный текущим продавцом
-      seller: { name: data.sellerName || 'Вы', deals: 0 },
-      ...data,
-    };
-    setProducts((prev) => [newProduct, ...prev]);
-    return newProduct;
-  }, []);
-
-  const markSold = useCallback((id) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'sold' } : p)));
-  }, []);
-
-  const removeProduct = useCallback((id) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-  }, []);
-
+  // Создание, смена статуса и удаление объявлений — на сервере, см.
+  // MyListingsContext: после любого изменения он вызывает refresh() отсюда.
   const value = useMemo(
-    () => ({ products, loading, error, hasMore, refresh, loadMore, addProduct, markSold, removeProduct }),
-    [products, loading, error, hasMore, refresh, loadMore, addProduct, markSold, removeProduct]
+    () => ({ products, loading, error, hasMore, refresh, loadMore }),
+    [products, loading, error, hasMore, refresh, loadMore]
   );
 
   return (

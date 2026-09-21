@@ -46,7 +46,11 @@ export default function VerifyScreen({ navigation, route }) {
       setVerifying(true);
       hidden.current?.blur();
       verifyCode(digits)
-        .then(() => navigation.navigate('ProfileSetup'))
+        .then(({ needsOnboarding }) => {
+          // Существующий аккаунт уже залогинен в контексте — модалка входа
+          // закроется сама (см. AuthModal), имя второй раз не спрашиваем.
+          if (needsOnboarding) navigation.navigate('ProfileSetup');
+        })
         .catch((e) => {
           setError(e.message || 'Неверный код. Попробуйте ещё раз.');
           setValue('');

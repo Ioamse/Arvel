@@ -27,13 +27,23 @@ export function FavoritesProvider({ children }) {
     itemsRef.current = items;
   }, [items]);
 
+  // Локальное избранное стираем только при реальном выходе (был вход -> нет
+  // входа). На холодном старте isLoggedIn тоже false, пока GET /me не вернул
+  // пользователя, — раньше это затирало сохранённое избранное при каждом
+  // запуске приложения.
+  const wasLoggedInRef = useRef(false);
+
   const refresh = useCallback(async () => {
     if (!isLoggedIn) {
       setItems([]);
       setFavoriteIds([]);
-      await clearFavorites();
+      if (wasLoggedInRef.current) {
+        wasLoggedInRef.current = false;
+        await clearFavorites();
+      }
       return;
     }
+    wasLoggedInRef.current = true;
     setLoading(true);
     const local = await loadFavorites();
     try {

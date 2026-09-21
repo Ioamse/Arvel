@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { colors, spacing, radius, font } from '../theme';
@@ -10,7 +10,8 @@ import {
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
-import { useProducts } from '../context/ProductsContext';
+import { useMyListings } from '../context/MyListingsContext';
+import { resolveMediaUrl } from '../utils/media';
 import { dealsHistory } from '../data/products';
 
 // Сумка для плитки «Заказы» / «Продажи»
@@ -46,20 +47,18 @@ function SettingRow({ icon, label, onPress, danger }) {
 export default function AccountScreen({ navigation }) {
   const { user, signOut } = useAuth();
   const { count: favCount } = useFavorites();
-  const { products } = useProducts();
+  const { items: myListings } = useMyListings();
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
   const name = user?.name || 'Александр Петров';
   const initial = name.trim()[0]?.toUpperCase() || 'A';
+  const avatarUri = resolveMediaUrl(user?.profile_pic_url);
   const isSeller = user?.role === 'seller';
   // is_admin приходит с бэкенда в /me и ортогонален role (см. OpenAPI) —
   // админом может быть и покупатель, не только продавец.
   const isAdmin = !!user?.is_admin;
 
-  const myListingsCount = useMemo(
-    () => products.filter((p) => p.mine).length,
-    [products]
-  );
+  const myListingsCount = myListings.length;
 
   const confirmLogout = () => setLogoutConfirmVisible(true);
 
@@ -89,7 +88,11 @@ export default function AccountScreen({ navigation }) {
         {/* Блок аватара */}
         <View style={styles.profileRow}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{initial}</Text>
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{name}</Text>
@@ -223,7 +226,9 @@ const styles = StyleSheet.create({
     width: 80, height: 80, borderRadius: 40,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  avatarImage: { width: 80, height: 80 },
   avatarText: { color: colors.text, fontSize: font.sizeXL, fontWeight: '800' },
   name: { color: colors.text, fontSize: 20, fontWeight: '700' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },

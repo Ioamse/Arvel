@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { colors, spacing, radius, font } from '../theme';
-import { CheckCircle, TeeIcon, SneakerIcon, TrashIcon } from './Icons';
+import { CheckCircle, TeeIcon, TrashIcon } from './Icons';
 import ConfirmDialog from './ConfirmDialog';
+import { useMoney } from '../context/AppConfigContext';
+import { resolveMediaUrl } from '../utils/media';
 
+// product — ProductSummary с бэкенда. out_of_stock у нас — «Продано».
 export default function MyListingCard({ product, onPress, onMarkSold, onDelete }) {
+  const money = useMoney();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
-  const Placeholder = product.kind === 'sneaker' ? SneakerIcon : TeeIcon;
-  const sold = product.status === 'sold';
+  const imageUrl = resolveMediaUrl(product.thumbnail_url);
+  const sold = product.status === 'out_of_stock';
 
   const askDelete = () => {
     setMenuOpen(false);
@@ -18,7 +22,11 @@ export default function MyListingCard({ product, onPress, onMarkSold, onDelete }
   return (
     <Pressable style={[styles.card, sold && styles.cardSold]} onPress={onPress}>
       <View style={styles.imageWrap}>
-        <Placeholder size={90} />
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+        ) : (
+          <TeeIcon size={90} />
+        )}
       </View>
 
       <View style={styles.statusRow}>
@@ -30,9 +38,9 @@ export default function MyListingCard({ product, onPress, onMarkSold, onDelete }
       </View>
 
       <View style={styles.info}>
-        <Text style={styles.brand} numberOfLines={1}>{product.brand}</Text>
+        <Text style={styles.brand} numberOfLines={1}>{product.brand?.name || ''}</Text>
         <Text style={styles.title} numberOfLines={1}>{product.title}</Text>
-        <Text style={styles.price}>{product.price.toLocaleString('ru-RU')} ₽</Text>
+        <Text style={styles.price}>{money.formatMinor(product.price_minor)}</Text>
       </View>
 
       <View style={styles.menuWrap}>
@@ -90,6 +98,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  image: { width: '100%', height: '100%' },
 
   statusRow: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   statusBadge: {

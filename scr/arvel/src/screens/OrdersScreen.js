@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
 import { BackIcon, TeeIcon, SneakerIcon } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
+import { useMoney } from '../context/AppConfigContext';
 import { dealsHistory } from '../data/products';
 
 export default function OrdersScreen({ navigation }) {
   const { user } = useAuth();
+  const money = useMoney();
   const isSeller = user?.role === 'seller';
   const title = isSeller ? 'Продажи' : 'Заказы';
   const rowLabel = isSeller ? 'Продажа' : 'Покупка';
@@ -50,7 +52,7 @@ export default function OrdersScreen({ navigation }) {
                     <Text style={styles.dealTitle}>{d.title}</Text>
                     <Text style={styles.dealSub}>{rowLabel} · {d.date}</Text>
                   </View>
-                  <Text style={styles.dealPrice}>{d.price.toLocaleString('ru-RU')} ₽</Text>
+                  <Text style={styles.dealPrice}>{money.formatMajor(d.price)}</Text>
                 </View>
               );
             })}

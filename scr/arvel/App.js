@@ -9,6 +9,7 @@ import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { ProductsProvider } from './src/context/ProductsContext';
+import { MyListingsProvider } from './src/context/MyListingsContext';
 import { AppConfigProvider } from './src/context/AppConfigContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors } from './src/theme';
@@ -48,12 +49,14 @@ export default function App() {
         <AppConfigProvider>
           <AuthProvider>
             <ProductsProvider>
-              <FavoritesProvider>
-                <NavigationContainer theme={navTheme}>
-                  <StatusBar style="light" backgroundColor={colors.bg} />
-                  <RootNavigator />
-                </NavigationContainer>
-              </FavoritesProvider>
+              <MyListingsProvider>
+                <FavoritesProvider>
+                  <NavigationContainer theme={navTheme}>
+                    <StatusBar style="light" backgroundColor={colors.bg} />
+                    <RootNavigator />
+                  </NavigationContainer>
+                </FavoritesProvider>
+              </MyListingsProvider>
             </ProductsProvider>
           </AuthProvider>
         </AppConfigProvider>
