@@ -108,9 +108,15 @@ export default function ConversationScreen({ navigation, route }) {
             <Text style={styles.rating}>{rating.toFixed(1)}</Text>
           </View>
         </View>
-        <Pressable hitSlop={8} onPress={onCallPress}>
-          <PhoneCallIcon size={22} color={colors.textMuted} />
-        </Pressable>
+        {/* Бэкенд пока не отдаёт номер телефона продавца — кнопка звонка
+            вела только к алерту «Номер недоступен» на каждый тап, что
+            выглядело как сломанная функция. Скрываем её до появления
+            номера в API, а не оставляем нерабочей. */}
+        {!!phone && (
+          <Pressable hitSlop={8} onPress={onCallPress}>
+            <PhoneCallIcon size={22} color={colors.textMuted} />
+          </Pressable>
+        )}
       </View>
 
       {/* KeyboardAware поднимает контент над клавиатурой на обеих платформах

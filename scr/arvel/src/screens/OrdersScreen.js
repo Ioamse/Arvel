@@ -13,7 +13,10 @@ export default function OrdersScreen({ navigation }) {
   const { user } = useAuth();
   const money = useMoney();
   const isSeller = user?.role === 'seller';
-  const title = isSeller ? 'Продажи' : 'Заказы';
+  // «Заказы»/«Продажи» подразумевали текущие, незавершённые заказы — а тут
+  // только история уже прошедших сделок (mock, нет эндпоинта активных
+  // заказов). Заголовок и пустое состояние теперь говорят прямо об этом.
+  const title = isSeller ? 'Завершённые продажи' : 'Завершённые сделки';
   const rowLabel = isSeller ? 'Продажа' : 'Покупка';
   // Пока это статичная история (mock-данные, нет эндпоинта сделок) — строки
   // раньше вообще ничего не делали по тапу. Открываем то, что реально есть,
@@ -34,7 +37,7 @@ export default function OrdersScreen({ navigation }) {
         {dealsHistory.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>
-              {isSeller ? 'Пока нет продаж' : 'Пока нет заказов'}
+              {isSeller ? 'Пока нет завершённых продаж' : 'Пока нет завершённых сделок'}
             </Text>
             <Text style={styles.emptySub}>
               {isSeller
