@@ -96,7 +96,7 @@ export default function AccountScreen({ navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{name}</Text>
-            {isSeller && (
+            {isSeller ? (
               <>
                 <View style={styles.ratingRow}>
                   <StarIcon size={16} />
@@ -106,6 +106,10 @@ export default function AccountScreen({ navigation }) {
                   <Text style={styles.sellerBadgeText}>Продавец</Text>
                 </View>
               </>
+            ) : (
+              <View style={[styles.sellerBadge, styles.buyerBadge]}>
+                <Text style={[styles.sellerBadgeText, styles.buyerBadgeText]}>Покупатель</Text>
+              </View>
             )}
           </View>
         </View>
@@ -238,6 +242,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 4, marginTop: 8,
   },
   sellerBadgeText: { color: colors.accentText, fontSize: font.sizeSM, fontWeight: '800' },
+  buyerBadge: { backgroundColor: colors.surfaceAlt },
+  buyerBadgeText: { color: colors.textMuted },
 
   // Серый контур, как в промте
   editBtn: {

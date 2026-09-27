@@ -4,14 +4,20 @@ import { colors, spacing, radius, font } from '../theme';
 
 // Тёмный кастомный диалог подтверждения — вместо системного Alert.alert,
 // который на Android рисуется белым и выбивается из тёмной темы приложения.
+// onDismiss — тап мимо карточки и системная «Назад»; по умолчанию то же, что
+// «Отмена». Нужен, когда «Отмена» — самостоятельное действие (например,
+// «Не сохранять»), которое нельзя совершать случайным тапом по фону.
+// confirmTone: 'danger' (красная кнопка) или 'accent' (фирменная жёлтая).
 export default function ConfirmDialog({
   visible, title, message,
   confirmText = 'Удалить', cancelText = 'Отмена',
-  onConfirm, onCancel,
+  confirmTone = 'danger',
+  onConfirm, onCancel, onDismiss = onCancel,
 }) {
+  const accent = confirmTone === 'accent';
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.overlay} onPress={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      <Pressable style={styles.overlay} onPress={onDismiss}>
         <Pressable style={styles.card} onPress={() => {}}>
           <Text style={styles.title}>{title}</Text>
           {!!message && <Text style={styles.message}>{message}</Text>}
@@ -19,8 +25,8 @@ export default function ConfirmDialog({
             <Pressable style={[styles.btn, styles.cancelBtn]} onPress={onCancel}>
               <Text style={styles.cancelText}>{cancelText}</Text>
             </Pressable>
-            <Pressable style={[styles.btn, styles.confirmBtn]} onPress={onConfirm}>
-              <Text style={styles.confirmText}>{confirmText}</Text>
+            <Pressable style={[styles.btn, styles.confirmBtn, accent && styles.confirmBtnAccent]} onPress={onConfirm}>
+              <Text style={[styles.confirmText, accent && styles.confirmTextAccent]}>{confirmText}</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -50,4 +56,6 @@ const styles = StyleSheet.create({
   cancelText: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
   confirmBtn: { backgroundColor: colors.danger },
   confirmText: { color: colors.text, fontSize: font.sizeMD, fontWeight: '800' },
+  confirmBtnAccent: { backgroundColor: colors.accent },
+  confirmTextAccent: { color: colors.accentText },
 });

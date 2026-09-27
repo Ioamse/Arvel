@@ -26,8 +26,22 @@ export default function WelcomeScreen({ navigation }) {
       <View style={styles.footer}>
         <PrimaryButton title="Войти" onPress={() => navigation.navigate('Phone')} />
         <Text style={styles.legal}>
-          Продолжая, вы принимаете <Text style={styles.legalLink}>Условия</Text> и{' '}
-          <Text style={styles.legalLink}>Политику{'\n'}конфиденциальности</Text>
+          Продолжая, вы принимаете{' '}
+          <Text
+            style={styles.legalLink}
+            suppressHighlighting
+            onPress={() => navigation.navigate('Legal', { doc: 'terms' })}
+          >
+            Условия
+          </Text>
+          {' '}и{' '}
+          <Text
+            style={styles.legalLink}
+            suppressHighlighting
+            onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}
+          >
+            Политику{'\n'}конфиденциальности
+          </Text>
         </Text>
       </View>
     </SafeAreaView>

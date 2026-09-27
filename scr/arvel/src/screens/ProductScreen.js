@@ -8,21 +8,24 @@ import { useFavorites } from '../context/FavoritesContext';
 import { useAppConfig, useMoney, labelFor } from '../context/AppConfigContext';
 import { useAuth } from '../context/AuthContext';
 import { resolveMediaUrl } from '../utils/media';
+import { productUrl } from '../utils/links';
 
 export default function ProductScreen({ navigation, route }) {
   const id = route?.params?.id;
   const { isFavorite, toggleFavorite } = useFavorites();
   const { conditions } = useAppConfig();
   const money = useMoney();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
 
   // Покупка и переписка с продавцом доступны только вошедшим — гостя
-  // отправляем на авторизацию вместо открытия чата.
+  // отправляем на авторизацию вместо открытия чата. Свой товар купить или
+  // написать по нему самому себе нельзя.
   const openConversation = (fromBuy) => {
     if (!isLoggedIn) {
       navigation.navigate('Auth');
       return;
     }
+    if (isOwn) return;
     navigation.navigate('Conversation', {
       name: shop?.shop_name || 'Продавец',
       rating: shop?.rating,
@@ -40,10 +43,13 @@ export default function ProductScreen({ navigation, route }) {
     toggleFavorite(product.id, product);
   };
 
+  // Ссылка — прямо в тексте сообщения: поле url у Share учитывает только iOS,
+  // а на Android получатель увидел бы одно название без ссылки.
   const onSharePress = () => {
     const brand = typeof product.brand === 'string' ? product.brand : product.brand?.name;
+    const title = [brand, product.title].filter(Boolean).join(' ');
     Share.share({
-      message: [brand, product.title].filter(Boolean).join(' '),
+      message: [title, money.formatMinor(product.price_minor), productUrl(product.id)].filter(Boolean).join('\n'),
     }).catch(() => {});
   };
 
@@ -102,6 +108,8 @@ export default function ProductScreen({ navigation, route }) {
   const sizeLabel = product.size_value || (product.size_system === 'one_size' ? 'One size' : '—');
   const conditionLabel = labelFor(conditions, product.condition);
   const shop = product.seller;
+  // seller.id — это магазин, а seller.seller_id — пользователь-владелец.
+  const isOwn = !!user?.id && shop?.seller_id === user.id;
 
   return (
     <View style={styles.safe}>
@@ -204,12 +212,20 @@ export default function ProductScreen({ navigation, route }) {
 
       {/* Нижняя панель */}
       <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
-        <Pressable style={styles.buyBtn} onPress={() => openConversation(true)}>
-          <Text style={styles.buyText}>Купить</Text>
-        </Pressable>
-        <Pressable style={styles.chatBtn} onPress={() => openConversation(false)}>
-          <ChatIcon size={24} color={colors.text} />
-        </Pressable>
+        {isOwn ? (
+          <View style={styles.ownNote}>
+            <Text style={styles.ownNoteText}>Это ваше объявление</Text>
+          </View>
+        ) : (
+          <>
+            <Pressable style={styles.buyBtn} onPress={() => openConversation(true)}>
+              <Text style={styles.buyText}>Купить</Text>
+            </Pressable>
+            <Pressable style={styles.chatBtn} onPress={() => openConversation(false)}>
+              <ChatIcon size={24} color={colors.text} />
+            </Pressable>
+          </>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -285,4 +301,9 @@ const styles = StyleSheet.create({
     width: 60, borderRadius: radius.pill, backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center',
   },
+  ownNote: {
+    flex: 1, backgroundColor: colors.surface, borderRadius: radius.pill,
+    paddingVertical: 18, alignItems: 'center',
+  },
+  ownNoteText: { color: colors.textMuted, fontSize: font.sizeMD, fontWeight: '700' },
 });

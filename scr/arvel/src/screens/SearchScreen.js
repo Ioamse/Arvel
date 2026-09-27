@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, radius, font } from '../theme';
 import { SearchIcon, ClockIcon, CloseIcon, TeeIcon } from '../components/Icons';
 import ProductCard from '../components/ProductCard';
@@ -9,8 +10,11 @@ import { listBrands } from '../api/catalog';
 import { useProducts } from '../context/ProductsContext';
 import { useMoney } from '../context/AppConfigContext';
 
-// «Недавнее» — пока только локальный список без сохранения между сессиями,
-// в спеке нет эндпоинта под историю поиска.
+// «Недавнее» переживает уход с экрана (стек «Каталога»/«Главной» сбрасывается
+// на первый экран при переключении вкладки, см. popToTopOnBlur в MainTabs) —
+// без AsyncStorage список каждый раз возвращался к этим трём заглушкам.
+const RECENT_KEY = 'arvell.recent_searches';
+const RECENT_LIMIT = 8;
 const INITIAL_RECENT = ['Air Max', 'Stone Island худи', 'Куртка зима'];
 
 export default function SearchScreen({ navigation }) {
@@ -19,22 +23,55 @@ export default function SearchScreen({ navigation }) {
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState(INITIAL_RECENT);
   const [popularBrands, setPopularBrands] = useState([]);
+  const [brandSuggestions, setBrandSuggestions] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
 
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
 
+  const recentLoaded = useRef(false);
+
   useEffect(() => {
     listBrands({ limit: 5 })
       .then((res) => setPopularBrands(res.data || []))
       .catch(() => {});
+    AsyncStorage.getItem(RECENT_KEY)
+      .then((raw) => {
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (Array.isArray(saved)) setRecent(saved);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { recentLoaded.current = true; });
   }, []);
+
+  const addRecent = (term) => {
+    const clean = term.trim();
+    if (!clean) return;
+    setRecent((r) => {
+      const next = [clean, ...r.filter((x) => x.toLowerCase() !== clean.toLowerCase())].slice(0, RECENT_LIMIT);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  const removeRecent = (item) => {
+    setRecent((r) => {
+      const next = r.filter((x) => x !== item);
+      // Пишем только после первой загрузки — иначе стартовый рендер с
+      // заглушками успевал бы затереть уже сохранённый список.
+      if (recentLoaded.current) AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
 
   useEffect(() => {
     const q = query.trim();
     if (!q) {
       setResults(null);
+      setBrandSuggestions([]);
       return;
     }
     setSearching(true);
@@ -43,8 +80,15 @@ export default function SearchScreen({ navigation }) {
     // результаты нового («abc»), если он пришёл позже.
     let cancelled = false;
     const t = setTimeout(() => {
+      listBrands({ q, limit: 6 })
+        .then((res) => { if (!cancelled) setBrandSuggestions(res.data || []); })
+        .catch(() => { if (!cancelled) setBrandSuggestions([]); });
       listProducts({ q })
-        .then((page) => { if (!cancelled) setResults(page.data || []); })
+        .then((page) => {
+          if (cancelled) return;
+          setResults(page.data || []);
+          addRecent(q);
+        })
         .catch(() => { if (!cancelled) { setResults([]); setSearchError(true); } })
         .finally(() => { if (!cancelled) setSearching(false); });
     }, 350);
@@ -53,8 +97,6 @@ export default function SearchScreen({ navigation }) {
       clearTimeout(t);
     };
   }, [query]);
-
-  const removeRecent = (item) => setRecent((r) => r.filter((x) => x !== item));
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -89,6 +131,21 @@ export default function SearchScreen({ navigation }) {
           renderItem={({ item }) => (
             <ProductCard product={item} onPress={() => navigation.navigate('Product', { id: item.id })} />
           )}
+          ListHeaderComponent={
+            // Бренды, чьё название начинается похоже на введённый текст —
+            // подсказка на случай опечатки или неполного названия.
+            brandSuggestions.length > 0 && brandSuggestions.some((b) => b.name.toLowerCase() !== query.trim().toLowerCase()) ? (
+              <View style={styles.suggestWrap}>
+                {brandSuggestions
+                  .filter((b) => b.name.toLowerCase() !== query.trim().toLowerCase())
+                  .map((b) => (
+                    <Pressable key={b.id} style={styles.suggestChip} onPress={() => setQuery(b.name)}>
+                      <Text style={styles.suggestText}>{b.name}</Text>
+                    </Pressable>
+                  ))}
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             searching
               ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
@@ -117,13 +174,19 @@ export default function SearchScreen({ navigation }) {
             <>
               <Text style={styles.blockTitle}>Недавнее</Text>
               {recent.map((item) => (
-                <Pressable key={item} style={styles.recentRow} onPress={() => setQuery(item)}>
-                  <ClockIcon size={20} />
-                  <Text style={styles.recentText}>{item}</Text>
+                // Раньше кнопка удаления была вложенным Pressable внутри
+                // строки-Pressable — на части устройств вложенный жест-хендлер
+                // перехватывал тач, и тап по самой строке переставал отвечать.
+                // Теперь это два независимых Pressable рядом в обычном View.
+                <View key={item} style={styles.recentRow}>
+                  <Pressable style={styles.recentTap} onPress={() => setQuery(item)}>
+                    <ClockIcon size={20} />
+                    <Text style={styles.recentText}>{item}</Text>
+                  </Pressable>
                   <Pressable hitSlop={10} onPress={() => removeRecent(item)}>
                     <CloseIcon size={20} />
                   </Pressable>
-                </Pressable>
+                </View>
               ))}
             </>
           )}
@@ -172,8 +235,13 @@ const styles = StyleSheet.create({
   brandText: { color: colors.text, fontSize: font.sizeMD, fontWeight: '600' },
   brandTextActive: { color: colors.accent },
 
-  recentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  recentRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  recentTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   recentText: { flex: 1, color: colors.text, fontSize: font.sizeMD },
+
+  suggestWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  suggestChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  suggestText: { color: colors.text, fontSize: font.sizeSM, fontWeight: '600' },
 
   forYou: { paddingHorizontal: spacing.lg, gap: spacing.md },
   forYouCard: { width: 150, marginRight: spacing.md },

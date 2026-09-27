@@ -31,6 +31,14 @@ function normalizeUser(apiUser, extra = {}) {
 
 const digitsOnly = (s) => String(s ?? '').replace(/\D/g, '');
 
+// Если имя при регистрации не передали, бэкенд кладёт в display_name номер
+// телефона. Такое «имя» не показываем в полях ввода — там должно быть пусто.
+export function isPlaceholderName(user) {
+  const name = String(user?.display_name ?? '').trim();
+  const phone = digitsOnly(user?.phone);
+  return !name || (!!phone && digitsOnly(name) === phone);
+}
+
 // Аккаунт, созданный меньше этого времени назад, считаем только что
 // зарегистрированным. Запас нужен на расхождение часов телефона и сервера.
 const NEW_ACCOUNT_WINDOW_MS = 30 * 60 * 1000;
@@ -43,9 +51,7 @@ const NEW_ACCOUNT_WINDOW_MS = 30 * 60 * 1000;
 // В спеке нет флага «аккаунт новый», поэтому смотрим на имя и на created_at.
 function needsOnboarding(user) {
   if (!user || user.role === 'seller') return false;
-  const name = String(user.display_name ?? '').trim();
-  const nameIsDefault = !name || digitsOnly(name) === digitsOnly(user.phone);
-  if (!nameIsDefault) return false;
+  if (!isPlaceholderName(user)) return false;
   const createdAt = Date.parse(user.created_at);
   // Нет created_at — не можем доказать, что аккаунт старый: спросим имя.
   if (Number.isNaN(createdAt)) return true;
@@ -105,11 +111,28 @@ export function AuthProvider({ children }) {
       try {
         const me = await meApi.getMe();
         if (cancelled || epoch !== sessionEpoch.current) return;
-        setUser(normalizeUser(me));
+        const normalized = normalizeUser(me);
+        // Аккаунт мог быть создан (verifyCode уже выдаёт токены), но так и не
+        // получить имя, если человек свернул/закрыл приложение на ProfileSetup
+        // до нажатия «Завершить». Раньше холодный старт логинил его сразу с
+        // именем-плейсхолдером (номером телефона) — регистрация как бы сама
+        // «завершалась» без ввода имени. Ведём себя как verifyCode: для
+        // такого аккаунта не логиним, а возвращаем на дозаполнение профиля.
+        if (needsOnboarding(normalized)) {
+          setPendingUser(normalized);
+          return;
+        }
+        setUser(normalized);
         setIsLoggedIn(true);
-      } catch {
-        // Не трогаем хранилище, если пока шёл запрос, вошёл другой аккаунт.
-        if (!cancelled && epoch === sessionEpoch.current) await clearSession();
+      } catch (e) {
+        // Стираем сессию только когда сервер сам отверг токен (401/403) —
+        // это и правда «не залогинен». Обрыв сети, таймаут или 5xx на самом
+        // первом /me (частый случай на iOS в реальной сети) не повод удалять
+        // рабочие токены: до этой правки такая заминка навсегда выкидывала
+        // человека в гостя, хотя аккаунт был зарегистрирован. Не трогаем
+        // хранилище и в случае, если пока шёл запрос, вошёл другой аккаунт.
+        const isAuthRejected = e?.status === 401 || e?.status === 403;
+        if (isAuthRejected && !cancelled && epoch === sessionEpoch.current) await clearSession();
       } finally {
         clearTimeout(timer);
         if (!cancelled) setBootstrapping(false);

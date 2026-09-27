@@ -10,6 +10,8 @@ const EMPTY_CONFIG = {
   // Лимиты загрузки картинок — нужны форме создания товара.
   maxImages: 10,
   maxImageBytes: null,
+  maxImageWidth: null,
+  maxImageHeight: null,
   allowedImageTypes: [],
   loading: true,
   error: null,
@@ -38,6 +40,8 @@ export function AppConfigProvider({ children }) {
           conditions: config.conditions || [],
           maxImages: config.max_images_per_product ?? EMPTY_CONFIG.maxImages,
           maxImageBytes: config.max_image_bytes ?? null,
+          maxImageWidth: config.max_image_width ?? null,
+          maxImageHeight: config.max_image_height ?? null,
           allowedImageTypes: config.allowed_image_content_types || [],
           loading: false,
           error: null,

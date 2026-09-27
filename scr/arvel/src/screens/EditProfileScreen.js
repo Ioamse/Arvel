@@ -1,70 +1,103 @@
 // Экран редактирования профиля.
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, Alert, Image } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius } from '../theme';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isPlaceholderName } from '../context/AuthContext';
 import { useAppConfig } from '../context/AppConfigContext';
 import { uploadImage } from '../api/media';
 import { updateMyShop } from '../api/shops';
-import { toUploadAsset, imageProblem } from '../utils/imageUpload';
+import { toUploadAsset, prepareForUpload } from '../utils/imageUpload';
 import { resolveMediaUrl } from '../utils/media';
+import PhotoSourceSheet from '../components/PhotoSourceSheet';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function EditProfileScreen({ navigation }) {
   const { user, updateProfile } = useAuth();
-  const { allowedImageTypes, maxImageBytes } = useAppConfig();
-  const [fullName, setFullName] = useState(user?.name || '');
+  const { maxImageWidth, maxImageHeight, maxImageBytes } = useAppConfig();
+  // Номер телефона, который бэкенд подставляет вместо незаполненного имени,
+  // никнеймом не считаем — поле тогда пустое.
+  const initialNickname = isPlaceholderName(user) ? '' : (user?.name || '');
+  const [nickname, setNickname] = useState(initialNickname);
   const [saving, setSaving] = useState(false);
   // Новый аватар, выбранный на этом экране, { uri, contentType, filename }.
   // Пока не нажали «Сохранить», на сервер ничего не уходит.
   const [newAvatar, setNewAvatar] = useState(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  // Уход с экрана, отложенный до ответа в диалоге «Сохранить изменения?».
+  const [pendingLeave, setPendingLeave] = useState(null);
 
-  const initial = fullName.trim().charAt(0).toUpperCase() || 'A';
+  const initial = nickname.trim().charAt(0).toUpperCase() || 'A';
   const avatarUri = newAvatar?.uri || resolveMediaUrl(user?.profile_pic_url);
   const isSeller = user?.role === 'seller';
+  const canSave = nickname.trim().length > 0;
+  const dirty = nickname.trim() !== initialNickname.trim() || !!newAvatar;
 
-  const pickAvatar = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Нет доступа к фото', 'Разрешите доступ к галерее в настройках, чтобы выбрать аватар.');
-      return;
-    }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (res.canceled) return;
-    const asset = res.assets[0];
-    const problem = imageProblem(asset, { allowedTypes: allowedImageTypes, maxBytes: maxImageBytes });
-    if (problem) {
-      Alert.alert('Это фото не подходит', problem);
-      return;
-    }
-    setNewAvatar(toUploadAsset(asset));
-  };
+  // Выход «Назад» (кнопка, жест, системная кнопка Android) с несохранёнными
+  // правками — сначала спрашиваем, сохранить ли их.
+  const leaveGuard = useRef({ dirty, saving });
+  leaveGuard.current = { dirty, saving };
+  useEffect(() => navigation.addListener('beforeRemove', (e) => {
+    const { dirty: isDirty, saving: isSaving } = leaveGuard.current;
+    if (!isDirty || isSaving) return;
+    e.preventDefault();
+    setPendingLeave(e.data.action);
+  }), [navigation]);
 
-  const onSave = async () => {
+  const save = async () => {
     setSaving(true);
+    leaveGuard.current.saving = true;
     try {
-      const patch = { display_name: fullName.trim() };
+      const patch = { display_name: nickname.trim() };
       let profilePicUrl = null;
       if (newAvatar) {
-        profilePicUrl = await uploadImage(newAvatar);
+        // Фото с камеры намного больше лимитов хранилища (GET /config) —
+        // без ужатия оно отвечало 422.
+        const prepared = await prepareForUpload(newAvatar, {
+          maxWidth: maxImageWidth, maxHeight: maxImageHeight, maxBytes: maxImageBytes,
+        });
+        profilePicUrl = await uploadImage(prepared);
         patch.profile_pic_url = profilePicUrl;
       }
       await updateProfile(patch);
       // Продавцу это же фото показываем как логотип магазина (seller.profile_pic_url
       // на карточке товара берётся из магазина, а не из профиля).
       if (profilePicUrl && isSeller) await updateMyShop({ profile_pic_url: profilePicUrl });
-      navigation.goBack();
+      return true;
     } catch (e) {
       Alert.alert('Не удалось сохранить', e.message || 'Попробуйте ещё раз.');
+      return false;
     } finally {
       setSaving(false);
+      leaveGuard.current.saving = false;
     }
+  };
+
+  // После успешного сохранения правок больше нет — уходим без вопроса.
+  const leave = (action) => {
+    leaveGuard.current.dirty = false;
+    if (action) navigation.dispatch(action);
+    else navigation.goBack();
+  };
+
+  const onSave = async () => {
+    if (await save()) leave();
+  };
+
+  const onLeaveSave = async () => {
+    const action = pendingLeave;
+    setPendingLeave(null);
+    if (!canSave) {
+      Alert.alert('Укажите никнейм', 'Без никнейма профиль сохранить нельзя.');
+      return;
+    }
+    if (await save()) leave(action);
+  };
+
+  const onLeaveDiscard = () => {
+    const action = pendingLeave;
+    setPendingLeave(null);
+    leave(action);
   };
 
   return (
@@ -80,24 +113,26 @@ export default function EditProfileScreen({ navigation }) {
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.avatarBlock}>
-            <TouchableOpacity style={styles.avatar} activeOpacity={0.8} onPress={pickAvatar}>
+            <TouchableOpacity style={styles.avatar} activeOpacity={0.8} onPress={() => setSheetVisible(true)}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>{initial}</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cameraBadge} onPress={pickAvatar}>
+            <TouchableOpacity style={styles.cameraBadge} onPress={() => setSheetVisible(true)}>
               <Text style={styles.cameraIcon}>📷</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>Имя и фамилия</Text>
+          <Text style={styles.label}>Никнейм</Text>
           <TextInput
             style={[styles.input, styles.inputActive]}
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Имя и фамилия"
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="Придумайте никнейм"
+            autoCapitalize="none"
+            autoCorrect={false}
             placeholderTextColor="rgba(255,255,255,0.4)"
           />
 
@@ -119,12 +154,31 @@ export default function EditProfileScreen({ navigation }) {
           <TouchableOpacity
             style={[styles.saveButton, saving && styles.saveButtonDisabled]}
             onPress={onSave}
-            disabled={saving || fullName.trim().length === 0}
+            disabled={saving || !canSave}
           >
             <Text style={styles.saveText}>{saving ? 'Сохранение...' : 'Сохранить'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <PhotoSourceSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        onPick={(asset) => setNewAvatar(toUploadAsset(asset))}
+        onRemove={newAvatar ? () => setNewAvatar(null) : undefined}
+      />
+
+      <ConfirmDialog
+        visible={!!pendingLeave}
+        title="Сохранить изменения?"
+        message="Вы изменили профиль, но не сохранили изменения."
+        confirmText="Сохранить"
+        cancelText="Не сохранять"
+        confirmTone="accent"
+        onConfirm={onLeaveSave}
+        onCancel={onLeaveDiscard}
+        onDismiss={() => setPendingLeave(null)}
+      />
     </SafeAreaView>
   );
 }

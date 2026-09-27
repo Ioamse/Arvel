@@ -13,7 +13,7 @@ import { useAppConfig, useMoney } from '../context/AppConfigContext';
 import { listCategories, listBrands } from '../api/catalog';
 import { createProduct } from '../api/products';
 import { uploadImage } from '../api/media';
-import { guessContentType } from '../utils/imageUpload';
+import { toUploadAsset, prepareForUpload } from '../utils/imageUpload';
 
 const NO_BRAND = '';
 
@@ -94,7 +94,7 @@ export default function AddProductScreen({ navigation }) {
   const { symbol: currencySign } = useMoney();
   const {
     colors: colorOptions, conditions, sizeSystems,
-    maxImages, maxImageBytes, allowedImageTypes, loading: configLoading, reload: reloadConfig,
+    maxImages, maxImageBytes, maxImageWidth, maxImageHeight, loading: configLoading, reload: reloadConfig,
   } = useAppConfig();
   const scrollRef = useRef(null);
   // uri -> file_url: если публикация упала уже после загрузки фото,
@@ -215,26 +215,10 @@ export default function AddProductScreen({ navigation }) {
     });
     if (res.canceled) return;
 
-    const accepted = [];
-    let rejected = 0;
-    res.assets.forEach((asset) => {
-      const contentType = guessContentType(asset);
-      const typeOk = allowedImageTypes.length === 0 || allowedImageTypes.includes(contentType);
-      const sizeOk = !maxImageBytes || !asset.fileSize || asset.fileSize <= maxImageBytes;
-      if (typeOk && sizeOk) {
-        accepted.push({ uri: asset.uri, contentType, filename: asset.fileName || null });
-      } else {
-        rejected += 1;
-      }
-    });
-    if (accepted.length) setPhotos((prev) => [...prev, ...accepted].slice(0, maxImages));
-    if (rejected) {
-      const mb = maxImageBytes ? ` и до ${Math.round(maxImageBytes / 1048576)} МБ` : '';
-      Alert.alert(
-        'Часть фото не подошла',
-        `Допустимы форматы: ${allowedImageTypes.join(', ') || 'JPEG, PNG, WebP'}${mb}. Пропущено: ${rejected}.`
-      );
-    }
+    // Размер и формат не проверяем: перед загрузкой каждое фото ужимается под
+    // лимиты хранилища (prepareForUpload), иначе оно отвечало 422.
+    const accepted = res.assets.map(toUploadAsset);
+    setPhotos((prev) => [...prev, ...accepted].slice(0, maxImages));
   };
 
   const removePhoto = (uri) => setPhotos((prev) => prev.filter((p) => p.uri !== uri));
@@ -250,7 +234,9 @@ export default function AddProductScreen({ navigation }) {
         const p = photos[i];
         if (!uploadedRef.current[p.uri]) {
           setProgress(`Загрузка фото ${i + 1} из ${photos.length}…`);
-          uploadedRef.current[p.uri] = await uploadImage(p);
+          uploadedRef.current[p.uri] = await uploadImage(await prepareForUpload(p, {
+            maxWidth: maxImageWidth, maxHeight: maxImageHeight, maxBytes: maxImageBytes,
+          }));
         }
         urls.push(uploadedRef.current[p.uri]);
       }

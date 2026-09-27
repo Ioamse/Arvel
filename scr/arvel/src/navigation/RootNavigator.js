@@ -21,7 +21,7 @@ function AuthModal({ navigation }) {
 }
 
 export default function RootNavigator() {
-  const { bootstrapping } = useAuth();
+  const { bootstrapping, pendingUser } = useAuth();
   const [splashPlayed, setSplashPlayed] = useState(false);
 
   // Заставка холодного старта держится, пока идёт проверка сохранённой
@@ -35,7 +35,9 @@ export default function RootNavigator() {
   // точечно — при попытке купить товар, написать продавцу или открыть
   // «Чат»/«Профиль» (см. MainTabs и ProductScreen).
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    // Аккаунт создан, но имя не собрано (см. AuthContext) — открываем модалку
+    // входа сразу на ProfileSetup, а не оставляем человека гостем молча.
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={pendingUser ? 'Auth' : 'Main'}>
       <Stack.Screen name="Main" component={MainTabs} />
       {/* Вынесен из вкладочных стеков в корневой навигатор: экран диалога
           занимает весь экран, а таббар просто не рендерится под ним —

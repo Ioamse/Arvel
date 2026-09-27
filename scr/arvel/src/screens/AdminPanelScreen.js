@@ -43,7 +43,7 @@ function InviteRow({ invite, onRevoke }) {
   return (
     <View style={styles.inviteRow}>
       <View style={styles.inviteHead}>
-        <Text style={styles.inviteCode}>{invite.token}</Text>
+        <Text style={styles.inviteCode} numberOfLines={1} ellipsizeMode="middle">{invite.token}</Text>
         <InviteBadge status={invite.status} />
       </View>
       <Text style={styles.inviteSub}>
@@ -230,8 +230,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderRadius: radius.md,
     padding: spacing.md, marginBottom: spacing.sm, gap: 6,
   },
-  inviteHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  inviteCode: { color: colors.text, fontSize: font.sizeMD, fontWeight: '800' },
+  inviteHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  inviteCode: { flex: 1, color: colors.text, fontSize: font.sizeMD, fontWeight: '800' },
   inviteSub: { color: colors.textMuted, fontSize: font.sizeSM },
 
   badge: { borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },

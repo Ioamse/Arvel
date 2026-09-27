@@ -12,6 +12,7 @@ import { ProductsProvider } from './src/context/ProductsContext';
 import { MyListingsProvider } from './src/context/MyListingsContext';
 import { AppConfigProvider } from './src/context/AppConfigContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import linking from './src/navigation/linking';
 import { colors } from './src/theme';
 
 // По умолчанию NavigationContainer использует светлую тему React Navigation
@@ -51,7 +52,7 @@ export default function App() {
             <ProductsProvider>
               <MyListingsProvider>
                 <FavoritesProvider>
-                  <NavigationContainer theme={navTheme}>
+                  <NavigationContainer theme={navTheme} linking={linking}>
                     <StatusBar style="light" backgroundColor={colors.bg} />
                     <RootNavigator />
                   </NavigationContainer>

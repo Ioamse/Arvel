@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
 import {
   BackIcon, StarIcon, PhoneCallIcon, SendIcon, ImageIcon,
-  ClockIcon, TeeIcon, SneakerIcon, CloseIcon,
+  TeeIcon, SneakerIcon, CloseIcon,
 } from '../components/Icons';
 import KeyboardAware from '../components/KeyboardAware';
 import ZoomableImage from '../components/ZoomableImage';
@@ -37,9 +37,9 @@ export default function ConversationScreen({ navigation, route }) {
 
   // Поле ввода начинается пустым — без заготовленной фразы
   const [text, setText] = useState('');
-  const [messages, setMessages] = useState([
-    { id: 'm1', side: 'in', text: `Здравствуйте! ${product ? brandLabel + ' ' + product.title : 'Товар'} — оригинал, состояние отлично.`, time: 'сейчас' },
-  ]);
+  // Лента начинается пустой: сообщения пишут только сами собеседники,
+  // никаких автоматических реплик от имени продавца.
+  const [messages, setMessages] = useState([]);
   const feedRef = useRef(null);
   const [viewerImage, setViewerImage] = useState(null);
   // Фото, выбранное, но ещё не отправленное — показываем превью над полем
@@ -142,10 +142,6 @@ export default function ConversationScreen({ navigation, route }) {
                   <Text style={styles.productSub}>{sizeLabel} · {conditionLabel}</Text>
                   <Text style={styles.productPrice}>{priceLabel}</Text>
                 </View>
-              </View>
-              <View style={styles.statusBar}>
-                <ClockIcon size={16} color={colors.accent} />
-                <Text style={styles.statusText}>Ожидает подтверждения продавца</Text>
               </View>
             </View>
           )}
@@ -267,8 +263,6 @@ const styles = StyleSheet.create({
   productTitle: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
   productSub: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },
   productPrice: { color: colors.accent, fontSize: font.sizeLG, fontWeight: '800', marginTop: 4 },
-  statusBar: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,214,10,0.12)', paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  statusText: { color: colors.accent, fontSize: font.sizeSM, fontWeight: '700' },
 
   bubble: { maxWidth: '78%', borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   bubbleIn: { backgroundColor: colors.surface },

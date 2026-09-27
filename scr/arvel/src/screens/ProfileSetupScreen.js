@@ -1,19 +1,19 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, Pressable, ScrollView, Alert, Image, Modal,
+  View, Text, TextInput, StyleSheet, Pressable, ScrollView, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import { colors, spacing, radius, font } from '../theme';
-import { BackIcon, UserIcon, CameraIcon, ImageIcon, CloseIcon } from '../components/Icons';
+import { BackIcon, UserIcon, CameraIcon } from '../components/Icons';
 import KeyboardAware from '../components/KeyboardAware';
+import PhotoSourceSheet from '../components/PhotoSourceSheet';
 import ShieldIcon from '../components/ShieldIcon';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
 import { useAppConfig } from '../context/AppConfigContext';
 import { uploadImage } from '../api/media';
-import { toUploadAsset, imageProblem } from '../utils/imageUpload';
+import { toUploadAsset, prepareForUpload } from '../utils/imageUpload';
 
 // Сумка для роли «Я покупатель» — как на макете
 function BagIcon({ size = 22, color = colors.accentText }) {
@@ -40,28 +40,12 @@ function RoleRow({ active, onPress, icon, title, subtitle }) {
   );
 }
 
-// Строка-опция внутри шторки выбора фото
-function SheetOption({ icon, label, sub, danger, onPress }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.sheetRow, pressed && styles.sheetRowPressed]}
-      onPress={onPress}
-    >
-      <View style={[styles.sheetIcon, danger && styles.sheetIconDanger]}>{icon}</View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.sheetLabel, danger && { color: colors.danger }]}>{label}</Text>
-        {!!sub && <Text style={styles.sheetSub}>{sub}</Text>}
-      </View>
-    </Pressable>
-  );
-}
-
 export default function ProfileSetupScreen({ navigation }) {
   const {
     pendingPhone,
     completeOnboarding, sellerAcceptInvite, sellerComplete,
   } = useAuth();
-  const { allowedImageTypes, maxImageBytes } = useAppConfig();
+  const { maxImageWidth, maxImageHeight, maxImageBytes } = useAppConfig();
 
   // Не подставляем pendingUser.display_name сюда: бэкенд возвращает туда
   // номер телефона по умолчанию, если имя не было передано при регистрации
@@ -80,6 +64,12 @@ export default function ProfileSetupScreen({ navigation }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
+  // Аккаунт уже вошёл (isLoggedIn/pendingUser обновились), но AuthModal
+  // закрывает себя реактивным эффектом на следующем кадре, а не мгновенно.
+  // Если в этом окне тапнуть «Назад», экран успевает откатиться на Verify
+  // (код уже неактуален) прежде, чем модалка закроется сама. Блокируем
+  // «Назад» сразу по успеху, а не только на время самого запроса.
+  const finishedRef = useRef(false);
   // Продавец: после accept-invite бэкенд шлёт отдельный SMS-код именно для
   // подтверждения продавца — показываем компактный шаг ввода кода прямо
   // на этом же экране, не уходя на отдельный роут.
@@ -90,14 +80,9 @@ export default function ProfileSetupScreen({ navigation }) {
 
   const isSeller = role === 'seller';
 
-  const chooseAvatar = (asset) => {
-    const problem = imageProblem(asset, { allowedTypes: allowedImageTypes, maxBytes: maxImageBytes });
-    if (problem) {
-      Alert.alert('Это фото не подходит', problem);
-      return;
-    }
-    setAvatar(toUploadAsset(asset));
-  };
+  // Размер и формат не проверяем: перед загрузкой фото само ужимается под
+  // лимиты хранилища (prepareForUpload).
+  const chooseAvatar = (asset) => setAvatar(toUploadAsset(asset));
 
   // Возвращает публичный URL загруженного аватара или null. Сбой загрузки не
   // блокирует регистрацию: человек предупреждён и может добавить фото позже.
@@ -105,7 +90,9 @@ export default function ProfileSetupScreen({ navigation }) {
     if (!avatar) return null;
     if (uploadedAvatarRef.current?.uri === avatar.uri) return uploadedAvatarRef.current.url;
     try {
-      const url = await uploadImage(avatar);
+      const url = await uploadImage(await prepareForUpload(avatar, {
+        maxWidth: maxImageWidth, maxHeight: maxImageHeight, maxBytes: maxImageBytes,
+      }));
       uploadedAvatarRef.current = { uri: avatar.uri, url };
       return url;
     } catch (e) {
@@ -118,49 +105,6 @@ export default function ProfileSetupScreen({ navigation }) {
   };
 
   // --- Аватар ---
-
-  const pickFromLibrary = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        'Нет доступа к фото',
-        'Разрешите доступ к галерее в настройках, чтобы выбрать аватар.',
-      );
-      return;
-    }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!res.canceled) chooseAvatar(res.assets[0]);
-  };
-
-  const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        'Нет доступа к камере',
-        'Разрешите доступ к камере в настройках, чтобы сделать фото.',
-      );
-      return;
-    }
-    const res = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!res.canceled) chooseAvatar(res.assets[0]);
-  };
-
-  // Закрываем шторку и после закрытия запускаем действие.
-  // Небольшая задержка нужна, чтобы Modal успел скрыться до открытия
-  // нативного пикера — иначе на Android они конфликтуют.
-  const runFromSheet = (action) => {
-    setSheetVisible(false);
-    setTimeout(action, 250);
-  };
 
   const onAvatarPress = () => setSheetVisible(true);
 
@@ -186,6 +130,7 @@ export default function ProfileSetupScreen({ navigation }) {
         ...(profilePicUrl ? { profile_pic_url: profilePicUrl } : {}),
       });
       // isLoggedIn переключится в контексте — RootNavigator сам уйдёт на MainTabs.
+      finishedRef.current = true;
     } catch (e) {
       setFormError(e.message || 'Не удалось сохранить профиль. Попробуйте ещё раз.');
     } finally {
@@ -220,6 +165,7 @@ export default function ProfileSetupScreen({ navigation }) {
         displayName: name.trim(),
         profilePicUrl,
       });
+      finishedRef.current = true;
     } catch (e) {
       setFormError(e.message || 'Неверный код. Попробуйте ещё раз.');
       setSellerCode('');
@@ -250,7 +196,7 @@ export default function ProfileSetupScreen({ navigation }) {
       <KeyboardAware dismissOnTap={false}>
       {/* Шапка: назад слева, заголовок белым по центру — как на макете */}
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+        <Pressable hitSlop={10} onPress={() => { if (!finishedRef.current) navigation.goBack(); }}>
           <BackIcon />
         </Pressable>
         <Text style={styles.headerTitle}>Регистрация</Text>
@@ -373,55 +319,12 @@ export default function ProfileSetupScreen({ navigation }) {
       </View>
       </KeyboardAware>
 
-      {/* Шторка выбора фото профиля — вместо системного Alert */}
-      <Modal
+      <PhotoSourceSheet
         visible={sheetVisible}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setSheetVisible(false)}
-      >
-        <Pressable style={styles.sheetOverlay} onPress={() => setSheetVisible(false)}>
-          {/* Тап по самой шторке не закрывает её */}
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Фото профиля</Text>
-
-            <SheetOption
-              icon={<CameraIcon size={20} color={colors.accent} />}
-              label="Сделать фото"
-              sub="Откроется камера"
-              onPress={() => runFromSheet(takePhoto)}
-            />
-            <View style={styles.sheetDivider} />
-            <SheetOption
-              icon={<ImageIcon size={20} color={colors.accent} />}
-              label="Выбрать из галереи"
-              sub="Фото из вашей библиотеки"
-              onPress={() => runFromSheet(pickFromLibrary)}
-            />
-
-            {avatar && (
-              <>
-                <View style={styles.sheetDivider} />
-                <SheetOption
-                  icon={<CloseIcon size={20} color={colors.danger} />}
-                  label="Удалить фото"
-                  danger
-                  onPress={() => runFromSheet(() => setAvatar(null))}
-                />
-              </>
-            )}
-
-            <Pressable
-              style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.85 }]}
-              onPress={() => setSheetVisible(false)}
-            >
-              <Text style={styles.sheetCancelText}>Отмена</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onClose={() => setSheetVisible(false)}
+        onPick={chooseAvatar}
+        onRemove={avatar ? () => setAvatar(null) : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -438,7 +341,8 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: font.sizeXXL, fontWeight: '800', marginTop: spacing.sm },
   sub: { color: colors.textMuted, fontSize: font.sizeMD, marginTop: spacing.sm },
 
-  avatarWrap: { alignSelf: 'center', marginTop: spacing.xl, marginBottom: spacing.lg },
+  // Было marginTop: spacing.xl — просили поднять аватар выше на этом экране.
+  avatarWrap: { alignSelf: 'center', marginTop: spacing.sm, marginBottom: spacing.lg },
   avatar: {
     width: 88, height: 88, borderRadius: 44,
     backgroundColor: colors.surfaceAlt,
@@ -492,52 +396,4 @@ const styles = StyleSheet.create({
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
 
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, paddingTop: spacing.sm },
-
-  // --- Шторка выбора фото ---
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  sheetTitle: {
-    color: colors.text, fontSize: font.sizeLG, fontWeight: '800',
-    marginBottom: spacing.sm,
-  },
-  sheetRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-    paddingVertical: 14,
-  },
-  sheetRowPressed: { opacity: 0.7 },
-  sheetIcon: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  sheetIconDanger: { backgroundColor: 'rgba(255,69,58,0.12)' },
-  sheetLabel: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
-  sheetSub: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },
-  sheetDivider: { height: 1, backgroundColor: colors.border, marginLeft: 42 + 16 },
-  sheetCancel: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.pill,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  sheetCancelText: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
 });

@@ -1,10 +1,17 @@
 // Настройки уведомлений.
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, radius, font } from '../theme';
 import { BackIcon } from '../components/Icons';
 import Toggle from '../components/Toggle';
+
+// Пока это не настройки на бэкенде (в спеке нет эндпоинта) — сохраняем
+// локально, иначе переключатели сбрасывались при каждом уходе с экрана
+// (стек вкладки «Профиль» сбрасывается на первый экран, см. MainTabs).
+const STORAGE_KEY = 'arvell.notification_prefs';
+const DEFAULTS = { msg: true, deal: true, auth: true, price: true, news: false };
 
 function Row({ title, subtitle, value, onValueChange, last }) {
   return (
@@ -19,11 +26,34 @@ function Row({ title, subtitle, value, onValueChange, last }) {
 }
 
 export default function NotificationsScreen({ navigation }) {
-  const [msg, setMsg] = useState(true);
-  const [deal, setDeal] = useState(true);
-  const [auth, setAuth] = useState(true);
-  const [price, setPrice] = useState(true);
-  const [news, setNews] = useState(false);
+  const [msg, setMsg] = useState(DEFAULTS.msg);
+  const [deal, setDeal] = useState(DEFAULTS.deal);
+  const [auth, setAuth] = useState(DEFAULTS.auth);
+  const [price, setPrice] = useState(DEFAULTS.price);
+  const [news, setNews] = useState(DEFAULTS.news);
+  // Не пишем в хранилище, пока не прочитали сохранённые значения —
+  // иначе первый рендер с дефолтами затёр бы то, что человек уже выбрал.
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (saved.msg != null) setMsg(saved.msg);
+        if (saved.deal != null) setDeal(saved.deal);
+        if (saved.auth != null) setAuth(saved.auth);
+        if (saved.price != null) setPrice(saved.price);
+        if (saved.news != null) setNews(saved.news);
+      })
+      .catch(() => {})
+      .finally(() => { loaded.current = true; });
+  }, []);
+
+  useEffect(() => {
+    if (!loaded.current) return;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ msg, deal, auth, price, news })).catch(() => {});
+  }, [msg, deal, auth, price, news]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

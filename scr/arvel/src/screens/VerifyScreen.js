@@ -36,6 +36,20 @@ export default function VerifyScreen({ navigation, route }) {
     return () => clearTimeout(t);
   }, [seconds]);
 
+  // Если клавиатуру свернули кнопкой «Назад»/жестом, поле остаётся в фокусе,
+  // и повторный focus() клавиатуру не открывает. Поэтому сначала снимаем
+  // фокус, а на следующем кадре ставим заново.
+  const openKeyboard = () => {
+    const input = hidden.current;
+    if (!input || verifying) return;
+    if (input.isFocused()) {
+      input.blur();
+      requestAnimationFrame(() => input.focus());
+    } else {
+      input.focus();
+    }
+  };
+
   const onChange = (text) => {
     if (verifying) return;
     const digits = text.replace(/\D/g, '').slice(0, LEN);
@@ -81,7 +95,7 @@ export default function VerifyScreen({ navigation, route }) {
         <Text style={styles.sub}>Код отправлен на {phone}</Text>
 
         {/* Тап по любой ячейке возвращает фокус в скрытое поле */}
-        <Pressable style={styles.cells} onPress={() => hidden.current?.focus()}>
+        <Pressable style={styles.cells} onPress={openKeyboard}>
           {Array.from({ length: LEN }).map((_, i) => (
             <View
               key={i}

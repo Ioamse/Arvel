@@ -1,10 +1,10 @@
 // Экран «Заказы» (покупатель) / «Продажи» (продавец).
 // Открывается из плиток статистики в «Профиле».
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
-import { BackIcon, TeeIcon, SneakerIcon } from '../components/Icons';
+import { BackIcon, TeeIcon, SneakerIcon, CloseIcon } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useMoney } from '../context/AppConfigContext';
 import { dealsHistory } from '../data/products';
@@ -15,6 +15,10 @@ export default function OrdersScreen({ navigation }) {
   const isSeller = user?.role === 'seller';
   const title = isSeller ? 'Продажи' : 'Заказы';
   const rowLabel = isSeller ? 'Продажа' : 'Покупка';
+  // Пока это статичная история (mock-данные, нет эндпоинта сделок) — строки
+  // раньше вообще ничего не делали по тапу. Открываем то, что реально есть,
+  // отдельным экраном не заводимся, т.к. деталей сделки на бэкенде ещё нет.
+  const [selected, setSelected] = useState(null);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -43,9 +47,10 @@ export default function OrdersScreen({ navigation }) {
             {dealsHistory.map((d, i) => {
               const Ph = d.kind === 'sneaker' ? SneakerIcon : TeeIcon;
               return (
-                <View
+                <Pressable
                   key={d.id}
                   style={[styles.dealRow, i < dealsHistory.length - 1 && styles.dealBorder]}
+                  onPress={() => setSelected(d)}
                 >
                   <View style={styles.dealImg}><Ph size={36} /></View>
                   <View style={{ flex: 1 }}>
@@ -53,12 +58,39 @@ export default function OrdersScreen({ navigation }) {
                     <Text style={styles.dealSub}>{rowLabel} · {d.date}</Text>
                   </View>
                   <Text style={styles.dealPrice}>{money.formatMajor(d.price)}</Text>
-                </View>
+                </Pressable>
               );
             })}
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setSelected(null)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            {selected && (() => {
+              const SelectedIcon = selected.kind === 'sneaker' ? SneakerIcon : TeeIcon;
+              return (
+                <>
+                  <View style={styles.modalHead}>
+                    <View style={styles.dealImg}><SelectedIcon size={36} /></View>
+                    <Pressable hitSlop={10} onPress={() => setSelected(null)}>
+                      <CloseIcon size={20} />
+                    </Pressable>
+                  </View>
+                  <Text style={styles.modalTitle}>{selected.title}</Text>
+                  <Text style={styles.modalRow}>{rowLabel} · {selected.date}</Text>
+                  <Text style={styles.modalPrice}>{money.formatMajor(selected.price)}</Text>
+                  <Text style={styles.modalNote}>
+                    Это запись из истории сделок. Подробности переписки и статус проверки подлинности
+                    появятся здесь, когда сделки будут вестись через ARVELL.
+                  </Text>
+                </>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -85,6 +117,14 @@ const styles = StyleSheet.create({
   dealTitle: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
   dealSub: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },
   dealPrice: { color: colors.text, fontSize: font.sizeMD, fontWeight: '800' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: spacing.lg },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  modalHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  modalTitle: { color: colors.text, fontSize: font.sizeLG, fontWeight: '800', marginTop: spacing.md },
+  modalRow: { color: colors.textMuted, fontSize: font.sizeMD, marginTop: 4 },
+  modalPrice: { color: colors.accent, fontSize: font.sizeXL, fontWeight: '800', marginTop: spacing.sm },
+  modalNote: { color: colors.textFaint, fontSize: font.sizeSM, lineHeight: 19, marginTop: spacing.md },
 
   empty: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   emptyTitle: { color: colors.text, fontSize: font.sizeLG, fontWeight: '700', textAlign: 'center' },

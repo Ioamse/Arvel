@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, font } from '../theme';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -12,12 +13,15 @@ const RIGHT_LEG_LEN = 83;
 const CHECK_LEN = 56;
 
 const LOGO_SIZE = 108;
+// Расстояние слогана от нижнего края безопасной зоны.
+const TAGLINE_OFFSET = 96;
 
 // Заставка холодного старта: буква «А» дорисовывается штрихами (левая
 // ножка → правая ножка → перекладина-галочка), затем плавно проявляются
 // название и слоган. Без bounce и лишних эффектов — тот стиль зарезервирован
 // для отдельного экрана «успешного входа».
 export default function AnimatedSplash({ onFinish }) {
+  const insets = useSafeAreaInsets();
   const leftLeg = useRef(new Animated.Value(0)).current;
   const rightLeg = useRef(new Animated.Value(0)).current;
   const check = useRef(new Animated.Value(0)).current;
@@ -101,7 +105,9 @@ export default function AnimatedSplash({ onFinish }) {
         <Animated.Text style={[styles.title, fadeStyle(title)]}>ARVELL</Animated.Text>
       </View>
 
-      <Animated.Text style={[styles.tagline, fadeStyle(tagline)]}>
+      {/* Отступ считаем от системной панели снизу: при edge-to-edge она
+          перекрывает экран, и на фиксированных 40px слоган прилипал к ней. */}
+      <Animated.Text style={[styles.tagline, { bottom: insets.bottom + TAGLINE_OFFSET }, fadeStyle(tagline)]}>
         одежда с гарантией подлинности
       </Animated.Text>
     </View>
@@ -125,7 +131,6 @@ const styles = StyleSheet.create({
   },
   tagline: {
     position: 'absolute',
-    bottom: 40,
     color: colors.textMuted,
     fontSize: 11,
     letterSpacing: 0.4,
