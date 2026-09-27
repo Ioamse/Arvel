@@ -112,6 +112,14 @@ export default function SearchScreen({ navigation }) {
             value={query}
             onChangeText={setQuery}
           />
+          {/* Раньше единственный способ стереть введённый текст — «Отмена»
+              справа от поля; крестик внутри поля стирает сразу, без бэкспейса
+              по букве и привычнее (как в iOS/Android поиске). */}
+          {query.length > 0 && (
+            <Pressable hitSlop={10} onPress={() => setQuery('')}>
+              <CloseIcon size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
         </View>
         {query.length > 0 && (
           <Pressable onPress={() => setQuery('')}>
