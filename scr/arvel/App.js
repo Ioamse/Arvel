@@ -11,6 +11,7 @@ import { FavoritesProvider } from './src/context/FavoritesContext';
 import { ProductsProvider } from './src/context/ProductsContext';
 import { MyListingsProvider } from './src/context/MyListingsContext';
 import { AppConfigProvider } from './src/context/AppConfigContext';
+import { ChatUnreadProvider } from './src/context/ChatUnreadContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import linking from './src/navigation/linking';
 import { colors } from './src/theme';
@@ -52,10 +53,12 @@ export default function App() {
             <ProductsProvider>
               <MyListingsProvider>
                 <FavoritesProvider>
-                  <NavigationContainer theme={navTheme} linking={linking}>
-                    <StatusBar style="light" backgroundColor={colors.bg} />
-                    <RootNavigator />
-                  </NavigationContainer>
+                  <ChatUnreadProvider>
+                    <NavigationContainer theme={navTheme} linking={linking}>
+                      <StatusBar style="light" backgroundColor={colors.bg} />
+                      <RootNavigator />
+                    </NavigationContainer>
+                  </ChatUnreadProvider>
                 </FavoritesProvider>
               </MyListingsProvider>
             </ProductsProvider>

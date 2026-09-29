@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useChatUnread } from '../context/ChatUnreadContext';
 import FeedScreen from '../screens/FeedScreen';
 import CatalogScreen from '../screens/CatalogScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
@@ -118,6 +119,7 @@ function TabIcon({ Icon, focused, badge }) {
 export default function MainTabs() {
   const insets = useSafeAreaInsets();
   const { isLoggedIn } = useAuth();
+  const { unread } = useChatUnread();
 
   // Гость может листать каталог/ленту/избранное свободно, но «Чат» и
   // «Профиль» требуют входа — вместо переключения вкладки открываем модалку
@@ -177,7 +179,18 @@ export default function MainTabs() {
       <Tab.Screen
         name="Chat"
         component={ChatStack}
-        options={{ title: 'Чат', tabBarIcon: ({ focused }) => <TabIcon Icon={ChatIcon} focused={focused} badge={isLoggedIn ? '3' : undefined} /> }}
+        options={{
+          title: 'Чат',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              Icon={ChatIcon}
+              focused={focused}
+              // Настоящее число непрочитанных; при нуле бейдж не рисуем,
+              // больше 99 показываем «99+», чтобы не разъезжала иконка.
+              badge={isLoggedIn && unread > 0 ? (unread > 99 ? '99+' : String(unread)) : undefined}
+            />
+          ),
+        }}
         listeners={guardTab}
       />
       <Tab.Screen

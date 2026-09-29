@@ -6,6 +6,7 @@ import { colors, spacing, radius, font } from '../theme';
 import { SearchIcon, CheckCircle, TrashIcon } from '../components/Icons';
 import { listConversations, markConversationRead } from '../api/chat';
 import { useAuth } from '../context/AuthContext';
+import { useChatUnread } from '../context/ChatUnreadContext';
 import { formatTime } from '../utils/chatFormat';
 import { loadHiddenChats, hideChats } from '../storage/chatStorage';
 
@@ -18,6 +19,7 @@ export default function ChatScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { user } = useAuth();
+  const { refresh: refreshUnread } = useChatUnread();
 
   const mapConversation = useCallback((c) => {
     // Собеседник зависит от роли: покупатель видит магазин, продавец —
@@ -87,7 +89,8 @@ export default function ChatScreen({ navigation }) {
     if (selectedIds.length === 0) return;
     const ids = selectedIds;
     setThreads(threads.map((t) => (ids.includes(t.id) ? { ...t, unread: 0, dot: false } : t)));
-    ids.forEach((id) => { markConversationRead(id).catch(() => {}); });
+    Promise.all(ids.map((id) => markConversationRead(id).catch(() => {})))
+      .then(refreshUnread);
     exitSelectMode();
   };
 

@@ -13,6 +13,7 @@ import KeyboardAware from '../components/KeyboardAware';
 import ZoomableImage from '../components/ZoomableImage';
 import { useAppConfig, useMoney, labelFor } from '../context/AppConfigContext';
 import { useAuth } from '../context/AuthContext';
+import { useChatUnread } from '../context/ChatUnreadContext';
 import {
   openConversation, listMessages, sendMessage, markConversationRead,
 } from '../api/chat';
@@ -55,6 +56,7 @@ export default function ConversationScreen({ navigation, route }) {
   // существующую ветку, если она уже есть.
   const [conversationId, setConversationId] = useState(route?.params?.conversationId || null);
   const { user } = useAuth();
+  const { refresh: refreshUnread } = useChatUnread();
   const feedRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -74,13 +76,13 @@ export default function ConversationScreen({ navigation, route }) {
       setConversationId(id);
       const res = await listMessages(id, { limit: 100 });
       setMessages(res?.data ?? []);
-      markConversationRead(id).catch(() => {});
+      markConversationRead(id).then(refreshUnread).catch(() => {});
     } catch (e) {
       setLoadError(e?.message || 'Не удалось загрузить переписку.');
     } finally {
       setLoading(false);
     }
-  }, [route?.params?.conversationId, product?.id]);
+  }, [route?.params?.conversationId, product?.id, refreshUnread]);
 
   useEffect(() => { load(); }, [load]);
   const [viewerImage, setViewerImage] = useState(null);
