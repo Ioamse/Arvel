@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable, ScrollView, Image, Alert, Linking, Modal,
 } from 'react-native';
@@ -12,9 +12,13 @@ import {
 import KeyboardAware from '../components/KeyboardAware';
 import ZoomableImage from '../components/ZoomableImage';
 import { useAppConfig, useMoney, labelFor } from '../context/AppConfigContext';
+import { useAuth } from '../context/AuthContext';
 import {
-  chatIdFor, loadMessages, saveMessages, upsertThread, formatTime,
-} from '../storage/chatStorage';
+  openConversation, listMessages, sendMessage, markConversationRead,
+} from '../api/chat';
+import { uploadImage } from '../api/media';
+import { resolveMediaUrl } from '../utils/media';
+import { formatTime, isImageBody } from '../utils/chatFormat';
 
 export default function ConversationScreen({ navigation, route }) {
   const { conditions } = useAppConfig();
@@ -40,48 +44,78 @@ export default function ConversationScreen({ navigation, route }) {
 
   // Поле ввода начинается пустым — без заготовленной фразы
   const [text, setText] = useState('');
-  // Лента начинается пустой: сообщения пишут только сами собеседники,
-  // никаких автоматических реплик от имени продавца.
+  // Переписка приходит с бэкенда: раньше она лежала в состоянии экрана и
+  // исчезала при выходе из диалога, хотя сервер её хранит.
   const [messages, setMessages] = useState([]);
-  // Раньше переписка жила только здесь, в состоянии экрана, и пропадала при
-  // выходе из диалога. Теперь она читается из локального хранилища при входе
-  // и дописывается при каждой отправке.
-  const chatId = chatIdFor({ chatId: route?.params?.chatId, name });
-  useEffect(() => {
-    let alive = true;
-    loadMessages(chatId).then((saved) => {
-      if (alive && saved.length) setMessages(saved);
-    });
-    return () => { alive = false; };
-  }, [chatId]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [sending, setSending] = useState(false);
+  // Диалог либо открыт из списка (id уже известен), либо заводится по товару
+  // со страницы «Купить» — POST /conversations идемпотентен и вернёт
+  // существующую ветку, если она уже есть.
+  const [conversationId, setConversationId] = useState(route?.params?.conversationId || null);
+  const { user } = useAuth();
   const feedRef = useRef(null);
+
+  const load = useCallback(async () => {
+    setLoadError(null);
+    try {
+      let id = route?.params?.conversationId || null;
+      if (!id && product?.id) {
+        const conv = await openConversation(product.id);
+        id = conv.id;
+      }
+      if (!id) {
+        // Переписка без товара (например поддержка) бэкендом не поддержана:
+        // диалоги заводятся только по конкретному товару.
+        setLoadError('Этот диалог пока недоступен — переписка открывается со страницы товара.');
+        return;
+      }
+      setConversationId(id);
+      const res = await listMessages(id, { limit: 100 });
+      setMessages(res?.data ?? []);
+      markConversationRead(id).catch(() => {});
+    } catch (e) {
+      setLoadError(e?.message || 'Не удалось загрузить переписку.');
+    } finally {
+      setLoading(false);
+    }
+  }, [route?.params?.conversationId, product?.id]);
+
+  useEffect(() => { load(); }, [load]);
   const [viewerImage, setViewerImage] = useState(null);
   // Фото, выбранное, но ещё не отправленное — показываем превью над полем
   // ввода, чтобы можно было добавить подпись перед отправкой (как в
   // WhatsApp/Telegram), а не отправлять картинку сразу без текста.
   const [pendingImage, setPendingImage] = useState(null);
 
-  const send = () => {
+  const send = async () => {
     const t = text.trim();
-    if (!t && !pendingImage) return;
-    const at = Date.now();
-    const msg = { id: 'me' + at, side: 'out', image: pendingImage, text: t || undefined, at };
-    const next = [...messages, msg];
-    setMessages(next);
-    saveMessages(chatId, next);
-    // Диалог поднимается в списке чатов с актуальным последним сообщением.
-    upsertThread({
-      id: chatId,
-      name,
-      rating,
-      phone,
-      last: t || 'Фото',
-      at,
-    });
+    if ((!t && !pendingImage) || !conversationId || sending) return;
+    const image = pendingImage;
     setText('');
     setPendingImage(null);
-    // Прокручиваем ленту к последнему сообщению
-    setTimeout(() => feedRef.current?.scrollToEnd({ animated: true }), 50);
+    setSending(true);
+    try {
+      // Фото уезжает в хранилище тем же путём, что и картинки товаров, а в
+      // сообщение попадает ссылка: отдельного поля под вложение у /messages
+      // нет, тело сообщения — единственное, что принимает бэкенд.
+      const sent = [];
+      if (image) {
+        const url = await uploadImage({ uri: image, contentType: 'image/jpeg' });
+        sent.push(await sendMessage(conversationId, url));
+      }
+      if (t) sent.push(await sendMessage(conversationId, t));
+      setMessages((m) => [...m, ...sent]);
+      setTimeout(() => feedRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch (e) {
+      // Возвращаем написанное в поле, чтобы ничего не пропало
+      setText((cur) => cur || t);
+      setPendingImage(image);
+      Alert.alert('Не отправлено', e?.message || 'Попробуйте ещё раз.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const pickImage = async () => {
@@ -176,31 +210,31 @@ export default function ConversationScreen({ navigation, route }) {
             </View>
           )}
 
-          {messages.map((m) => (
-            <View key={m.id} style={{ alignItems: m.side === 'out' ? 'flex-end' : 'flex-start' }}>
-              {m.image ? (
-                <View style={styles.imageMsg}>
-                  <Pressable onPress={() => setViewerImage(m.image)}>
-                    <Image source={{ uri: m.image }} style={styles.bubbleImage} />
-                  </Pressable>
-                  {!!m.text && (
-                    <View style={[styles.bubble, styles.captionBubble, m.side === 'out' ? styles.bubbleOut : styles.bubbleIn]}>
-                      <Text style={[styles.bubbleText, m.side === 'out' && { color: colors.accentText }]}>
-                        {m.text}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ) : (
-                <View style={[styles.bubble, m.side === 'out' ? styles.bubbleOut : styles.bubbleIn]}>
-                  <Text style={[styles.bubbleText, m.side === 'out' && { color: colors.accentText }]}>
-                    {m.text}
-                  </Text>
-                </View>
-              )}
-              <Text style={styles.time}>{formatTime(m.at)}</Text>
-            </View>
-          ))}
+          {loading && <Text style={styles.hint}>Загружаем переписку...</Text>}
+          {!!loadError && <Text style={styles.hint}>{loadError}</Text>}
+
+          {messages.map((m) => {
+            const mine = !!user?.id && m.sender_id === user.id;
+            const imageUri = isImageBody(m.body) ? resolveMediaUrl(m.body) : null;
+            return (
+              <View key={m.id} style={{ alignItems: mine ? 'flex-end' : 'flex-start' }}>
+                {imageUri ? (
+                  <View style={styles.imageMsg}>
+                    <Pressable onPress={() => setViewerImage(imageUri)}>
+                      <Image source={{ uri: imageUri }} style={styles.bubbleImage} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={[styles.bubble, mine ? styles.bubbleOut : styles.bubbleIn]}>
+                    <Text style={[styles.bubbleText, mine && { color: colors.accentText }]}>
+                      {m.body}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.time}>{formatTime(m.created_at)}</Text>
+              </View>
+            );
+          })}
         </ScrollView>
 
         {/* Поле ввода */}
@@ -234,7 +268,7 @@ export default function ConversationScreen({ navigation, route }) {
                 pressed && styles.btnPressed,
               ]}
               onPress={send}
-              disabled={!text.trim() && !pendingImage}
+              disabled={(!text.trim() && !pendingImage) || !conversationId || sending}
             >
               <SendIcon size={19} color={(text.trim() || pendingImage) ? colors.accentText : colors.textFaint} />
             </Pressable>
@@ -302,6 +336,7 @@ const styles = StyleSheet.create({
   imageMsg: { gap: 4 },
   captionBubble: { maxWidth: 180 },
   time: { color: colors.textFaint, fontSize: font.sizeXS, marginTop: 4 },
+  hint: { color: colors.textMuted, fontSize: font.sizeSM, textAlign: 'center', paddingVertical: spacing.md },
 
   inputBarSafe: {
     backgroundColor: colors.surface,

@@ -4,20 +4,59 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, font } from '../theme';
 import { SearchIcon, CheckCircle, TrashIcon } from '../components/Icons';
-import { loadThreads, deleteThreads, saveThreads, formatTime } from '../storage/chatStorage';
+import { listConversations, markConversationRead } from '../api/chat';
+import { useAuth } from '../context/AuthContext';
+import { formatTime } from '../utils/chatFormat';
+import { loadHiddenChats, hideChats } from '../storage/chatStorage';
 
 export default function ChatScreen({ navigation }) {
   const [query, setQuery] = useState('');
-  // Список собирается из реальных диалогов в локальном хранилище. Раньше тут
-  // лежали выдуманные собеседники, из-за чего чат выглядел работающим, хотя
-  // ни одного настоящего сообщения в нём не было.
+  // Диалоги приходят с бэкенда. Раньше тут лежали выдуманные собеседники,
+  // из-за чего раздел выглядел работающим, хотя ни одного настоящего
+  // сообщения в нём не было.
   const [threads, setThreads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { user } = useAuth();
+
+  const mapConversation = useCallback((c) => {
+    // Собеседник зависит от роли: покупатель видит магазин, продавец —
+    // покупателя.
+    const iAmSeller = !!user?.id && c.seller?.seller_id === user.id;
+    return {
+      id: c.id,
+      name: (iAmSeller ? c.buyer?.display_name : c.seller?.shop_name) || 'Диалог',
+      rating: c.seller?.rating,
+      phone: c.seller?.phone,
+      last: c.last_message_preview || 'Нет сообщений',
+      at: c.last_message_at || c.created_at,
+      unread: c.unread_count || 0,
+      dot: (c.unread_count || 0) > 0,
+    };
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      loadThreads().then((list) => { if (alive) setThreads(list); });
+      (async () => {
+        setError(null);
+        try {
+          const [res, hidden] = await Promise.all([
+            listConversations({ limit: 50 }),
+            loadHiddenChats(),
+          ]);
+          if (!alive) return;
+          setThreads((res?.data ?? [])
+            .filter((c) => !hidden.includes(c.id))
+            .map(mapConversation));
+        } catch (e) {
+          if (alive) setError(e?.message || 'Не удалось загрузить чаты.');
+        } finally {
+          if (alive) setLoading(false);
+        }
+      })();
       return () => { alive = false; };
-    }, []),
+    }, [mapConversation]),
   );
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -40,32 +79,32 @@ export default function ChatScreen({ navigation }) {
   const handleRowPress = (item) => {
     if (selectMode) toggleSelected(item.id);
     else navigation.navigate('Conversation', {
-      chatId: item.id, name: item.name, rating: item.rating, phone: item.phone,
+      conversationId: item.id, name: item.name, rating: item.rating, phone: item.phone,
     });
   };
 
   const markSelectedRead = () => {
     if (selectedIds.length === 0) return;
-    const next = threads.map((t) => (selectedIds.includes(t.id) ? { ...t, unread: 0, dot: false } : t));
-    setThreads(next);
-    saveThreads(next);
+    const ids = selectedIds;
+    setThreads(threads.map((t) => (ids.includes(t.id) ? { ...t, unread: 0, dot: false } : t)));
+    ids.forEach((id) => { markConversationRead(id).catch(() => {}); });
     exitSelectMode();
   };
 
   const deleteSelected = () => {
     if (selectedIds.length === 0) return;
     Alert.alert(
-      'Удалить чаты?',
-      `Будет удалено чатов: ${selectedIds.length}. Это действие нельзя отменить.`,
+      'Скрыть чаты?',
+      `Будет скрыто чатов: ${selectedIds.length}. Они исчезнут только у вас — собеседник продолжит видеть переписку.`,
       [
         { text: 'Отмена', style: 'cancel' },
         {
-          text: 'Удалить',
+          text: 'Скрыть',
           style: 'destructive',
           onPress: () => {
             const ids = selectedIds;
             setThreads(threads.filter((t) => !ids.includes(t.id)));
-            deleteThreads(ids);
+            hideChats(ids);
             exitSelectMode();
           },
         },
@@ -106,9 +145,10 @@ export default function ChatScreen({ navigation }) {
         ]}
         ListEmptyComponent={(
           <Text style={styles.empty}>
-            {query.trim()
-              ? 'Ничего не найдено'
-              : 'Пока нет переписок. Напишите продавцу со страницы товара — диалог появится здесь.'}
+            {loading ? 'Загружаем чаты...'
+              : error || (query.trim()
+                ? 'Ничего не найдено'
+                : 'Пока нет переписок. Напишите продавцу со страницы товара — диалог появится здесь.')}
           </Text>
         )}
         renderItem={({ item }) => {
@@ -164,7 +204,7 @@ export default function ChatScreen({ navigation }) {
               disabled={selectedIds.length === 0}
             >
               <TrashIcon size={18} color={colors.danger} />
-              <Text style={styles.panelBtnDangerText}>Удалить</Text>
+              <Text style={styles.panelBtnDangerText}>Скрыть</Text>
             </Pressable>
           </View>
         </View>
