@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
 import { BackIcon } from '../components/Icons';
+import { useAuth } from '../context/AuthContext';
 import {
   listSellerInvites, createSellerInvite, revokeSellerInvite,
   listAdminUsers, banUser, unbanUser,
@@ -84,6 +85,12 @@ function UserRow({ user, onToggleBan }) {
 }
 
 export default function AdminPanelScreen({ navigation }) {
+  // Права проверяет и сервер, но экран не должен открываться у не-админа:
+  // попасть сюда можно было только строкой в профиле, и это единственное,
+  // что его закрывало. Флаг is_admin приходит в /me и ортогонален role.
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
+
   const [tab, setTab] = useState('invites');
 
   const [invites, setInvites] = useState([]);
@@ -133,6 +140,23 @@ export default function AdminPanelScreen({ navigation }) {
       .then((updated) => setUsers((prev) => prev.map((u) => (u.id === id ? updated : u))))
       .catch((e) => Alert.alert('Не удалось изменить статус', e.message || 'Попробуйте ещё раз.'));
   };
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+            <BackIcon size={24} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Админ-панель</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.denied}>
+          <Text style={styles.deniedText}>У вас нет прав администратора.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -197,6 +221,8 @@ export default function AdminPanelScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  denied: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  deniedText: { color: colors.textMuted, fontSize: font.sizeMD, textAlign: 'center' },
   safe: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

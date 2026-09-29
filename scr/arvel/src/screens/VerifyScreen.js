@@ -15,7 +15,9 @@ const RESEND_SECONDS = 30;
 // Нативному полю негде мигать (оно невидимо), лишняя цифра
 // не может появиться на экране ни на мгновение.
 export default function VerifyScreen({ navigation, route }) {
-  const phone = route?.params?.phone ?? '+7 (999) 000-00-00';
+  // Без параметров тут показывался выдуманный номер, будто код ушёл именно
+  // на него. Лучше не показывать номер вовсе, чем чужой.
+  const phone = route?.params?.phone ?? null;
   const { verifyCode, registerPhone, pendingPhone } = useAuth();
   const [value, setValue] = useState('');
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
@@ -92,7 +94,7 @@ export default function VerifyScreen({ navigation, route }) {
 
       <View style={styles.body}>
         <Text style={styles.title}>Введите код</Text>
-        <Text style={styles.sub}>Код отправлен на {phone}</Text>
+        <Text style={styles.sub}>{phone ? `Код отправлен на ${phone}` : 'Код отправлен'}</Text>
 
         {/* Тап по любой ячейке возвращает фокус в скрытое поле */}
         <Pressable style={styles.cells} onPress={openKeyboard}>
@@ -127,9 +129,15 @@ export default function VerifyScreen({ navigation, route }) {
           <Text style={styles.resendOff}>
             Отправить код повторно через {seconds} с
           </Text>
-        ) : (
+        ) : pendingPhone ? (
           <Pressable onPress={resend}>
             <Text style={styles.resendOn}>Отправить код повторно</Text>
+          </Pressable>
+        ) : (
+          // Без номера повторно отправлять некуда: кнопка молча ничего не
+          // делала, что выглядело как поломка. Отправляем назад, на ввод номера.
+          <Pressable onPress={() => navigation.goBack()}>
+            <Text style={styles.resendOn}>Изменить номер</Text>
           </Pressable>
         )}
       </View>

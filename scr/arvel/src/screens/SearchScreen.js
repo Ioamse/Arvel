@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, FlatList, StyleSheet, Pressable, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, radius, font } from '../theme';
+import { resolveMediaUrl } from '../utils/media';
 import { SearchIcon, ClockIcon, CloseIcon, TeeIcon } from '../components/Icons';
 import ProductCard from '../components/ProductCard';
 import { listProducts } from '../api/products';
@@ -208,7 +209,13 @@ export default function SearchScreen({ navigation }) {
                 style={styles.forYouCard}
                 onPress={() => navigation.navigate('Product', { id: p.id })}
               >
-                <View style={styles.forYouImg}><TeeIcon size={72} /></View>
+                <View style={styles.forYouImg}>
+                  {resolveMediaUrl(p.thumbnail_url) ? (
+                    <Image source={{ uri: resolveMediaUrl(p.thumbnail_url) }} style={styles.forYouPhoto} />
+                  ) : (
+                    <TeeIcon size={72} />
+                  )}
+                </View>
                 <Text style={styles.forYouBrand} numberOfLines={1}>
                   {typeof p.brand === 'string' ? p.brand : p.brand?.name || ''}
                 </Text>
@@ -253,7 +260,8 @@ const styles = StyleSheet.create({
 
   forYou: { paddingHorizontal: spacing.lg, gap: spacing.md },
   forYouCard: { width: 150, marginRight: spacing.md },
-  forYouImg: { height: 150, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  forYouImg: { height: 150, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  forYouPhoto: { width: '100%', height: '100%' },
   forYouBrand: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700', marginTop: spacing.sm },
   forYouPrice: { color: colors.accent, fontSize: font.sizeMD, fontWeight: '800', marginTop: 2 },
 

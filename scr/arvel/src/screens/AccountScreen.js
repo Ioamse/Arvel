@@ -4,15 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { colors, spacing, radius, font } from '../theme';
 import {
-  StarIcon, HeartIcon, GridIcon, BellIcon, HelpIcon, DocIcon,
-  LogoutIcon, ChevronRight, ChatIcon, SunIcon,
+  HeartIcon, GridIcon, HelpIcon, DocIcon,
+  LogoutIcon, ChevronRight, SunIcon,
 } from '../components/Icons';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useMyListings } from '../context/MyListingsContext';
 import { resolveMediaUrl } from '../utils/media';
-import { dealsHistory } from '../data/products';
+import appConfig from '../../app.json';
 
 // Сумка для плитки «Заказы» / «Продажи»
 function BagIcon({ size = 22, color = colors.accent }) {
@@ -50,7 +50,7 @@ export default function AccountScreen({ navigation }) {
   const { items: myListings } = useMyListings();
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
-  const name = user?.name || 'Александр Петров';
+  const name = user?.name || 'Профиль';
   const initial = name.trim()[0]?.toUpperCase() || 'A';
   const avatarUri = resolveMediaUrl(user?.profile_pic_url);
   const isSeller = user?.role === 'seller';
@@ -71,10 +71,6 @@ export default function AccountScreen({ navigation }) {
     setLogoutConfirmVisible(false);
     await signOut();
     navigation.getParent()?.navigate('Feed');
-  };
-
-  const openSupportChat = () => {
-    navigation.navigate('Conversation', { name: 'Поддержка ARVELL', rating: 5.0 });
   };
 
   return (
@@ -98,10 +94,6 @@ export default function AccountScreen({ navigation }) {
             <Text style={styles.name}>{name}</Text>
             {isSeller ? (
               <>
-                <View style={styles.ratingRow}>
-                  <StarIcon size={16} />
-                  <Text style={styles.ratingText}>4.8 · 34 отзыва</Text>
-                </View>
                 <View style={styles.sellerBadge}>
                   <Text style={styles.sellerBadgeText}>Продавец</Text>
                 </View>
@@ -124,7 +116,7 @@ export default function AccountScreen({ navigation }) {
             <>
               <StatTile
                 icon={<BagIcon size={22} />}
-                value="47"
+                value="—"
                 label="Продажи"
                 onPress={() => navigation.navigate('Orders')}
               />
@@ -139,7 +131,7 @@ export default function AccountScreen({ navigation }) {
             <>
               <StatTile
                 icon={<BagIcon size={22} />}
-                value={String(dealsHistory.length)}
+                value="—"
                 label="Заказы"
                 onPress={() => navigation.navigate('Orders')}
               />
@@ -156,18 +148,6 @@ export default function AccountScreen({ navigation }) {
         {/* Настройки */}
         <Text style={styles.section}>Настройки</Text>
         <View style={styles.card}>
-          <SettingRow
-            icon={<BellIcon size={22} color={colors.text} />}
-            label="Уведомления"
-            onPress={() => navigation.navigate('Notifications')}
-          />
-          <View style={styles.rowDivider} />
-          <SettingRow
-            icon={<ChatIcon size={22} color={colors.text} />}
-            label="Чат с поддержкой"
-            onPress={openSupportChat}
-          />
-          <View style={styles.rowDivider} />
           <SettingRow
             icon={<HelpIcon size={22} />}
             label="Помощь"
@@ -198,7 +178,7 @@ export default function AccountScreen({ navigation }) {
           />
         </View>
 
-        <Text style={styles.version}>ARVELL · версия 1.4.0</Text>
+        <Text style={styles.version}>ARVELL · версия {appConfig.expo.version}</Text>
       </ScrollView>
 
       <ConfirmDialog

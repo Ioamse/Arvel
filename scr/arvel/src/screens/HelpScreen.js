@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font } from '../theme';
-import { BackIcon, ChevronRight, ChatIcon } from '../components/Icons';
+import { BackIcon, ChevronRight } from '../components/Icons';
 
 const FAQ = [
   { q: 'Как понять, что товар прошёл проверку подлинности?', a: 'Любой товар, загруженный на ARVELL, автоматически проходит проверку подлинности — отдельно ничего проверять не нужно.' },
@@ -52,20 +52,6 @@ export default function HelpScreen({ navigation }) {
           ))}
         </View>
 
-        <Text style={styles.section}>Служба поддержки</Text>
-        <View style={styles.card}>
-          <Pressable
-            style={styles.supportRow}
-            onPress={() => navigation.navigate('Conversation', { name: 'Поддержка ARVELL', rating: 5.0 })}
-          >
-            <View style={styles.supportIcon}><ChatIcon size={20} color={colors.accent} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.supportTitle}>Написать в поддержку</Text>
-              <Text style={styles.supportSub}>Ответим в течение дня</Text>
-            </View>
-            <ChevronRight size={20} />
-          </Pressable>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

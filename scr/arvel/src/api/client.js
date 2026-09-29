@@ -1,6 +1,12 @@
 import { getTokens, setTokens, clearTokens } from '../storage/tokenStorage';
 
-export const API_BASE_URL = 'http://176.123.162.135:8081';
+// Адрес бэкенда берётся из EXPO_PUBLIC_API_URL — переменные с этим префиксом
+// Expo подставляет в бандл на сборке, так что dev и prod разводятся без правок
+// кода. Значение по умолчанию оставлено, чтобы сборка без переменной работала
+// как раньше. Когда бэкенд переедет на HTTPS, поменять адрес здесь (или в
+// окружении) и убрать из app.json послабления NSAllowsArbitraryLoads и
+// usesCleartextTraffic.
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://176.123.162.135:8081';
 
 // RFC 9457 problem-detail error, thrown for every non-2xx response.
 export class ApiError extends Error {

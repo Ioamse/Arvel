@@ -32,6 +32,7 @@ export default function ConversationScreen({ navigation, route }) {
 
   const initial = name.trim()[0]?.toUpperCase() || 'A';
   const Ph = product?.kind === 'sneaker' ? SneakerIcon : TeeIcon;
+  const productThumb = resolveMediaUrl(product?.thumbnail_url || product?.images?.[0]?.url);
 
   // product может прийти в двух формах: реальный товар с бэкенда
   // (brand — объект {name}, price_minor — копейки, size_value/size_system,
@@ -202,7 +203,11 @@ export default function ConversationScreen({ navigation, route }) {
           {product && (
             <View style={styles.productCard}>
               <View style={styles.productTop}>
-                <View style={styles.productImg}><Ph size={48} /></View>
+                <View style={styles.productImg}>
+                  {productThumb
+                    ? <Image source={{ uri: productThumb }} style={styles.productPhoto} />
+                    : <Ph size={48} />}
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.productTitle}>{brandLabel} {product.title}</Text>
                   <Text style={styles.productSub}>{sizeLabel} · {conditionLabel}</Text>
@@ -325,7 +330,8 @@ const styles = StyleSheet.create({
 
   productCard: { borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.lg, overflow: 'hidden' },
   productTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  productImg: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  productImg: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  productPhoto: { width: '100%', height: '100%' },
   productTitle: { color: colors.text, fontSize: font.sizeMD, fontWeight: '700' },
   productSub: { color: colors.textMuted, fontSize: font.sizeSM, marginTop: 2 },
   productPrice: { color: colors.accent, fontSize: font.sizeLG, fontWeight: '800', marginTop: 4 },
