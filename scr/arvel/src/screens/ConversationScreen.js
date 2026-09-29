@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable, ScrollView, Image, Alert, Linking, Modal,
 } from 'react-native';
@@ -12,11 +12,14 @@ import {
 import KeyboardAware from '../components/KeyboardAware';
 import ZoomableImage from '../components/ZoomableImage';
 import { useAppConfig, useMoney, labelFor } from '../context/AppConfigContext';
+import {
+  chatIdFor, loadMessages, saveMessages, upsertThread, formatTime,
+} from '../storage/chatStorage';
 
 export default function ConversationScreen({ navigation, route }) {
   const { conditions } = useAppConfig();
   const money = useMoney();
-  const name = route?.params?.name || 'Алексей';
+  const name = route?.params?.name || 'Продавец';
   const rating = route?.params?.rating ?? 4.9;
   const phone = route?.params?.phone || null;
   const product = route?.params?.product || null;   // если пришли из «Купить»
@@ -40,6 +43,17 @@ export default function ConversationScreen({ navigation, route }) {
   // Лента начинается пустой: сообщения пишут только сами собеседники,
   // никаких автоматических реплик от имени продавца.
   const [messages, setMessages] = useState([]);
+  // Раньше переписка жила только здесь, в состоянии экрана, и пропадала при
+  // выходе из диалога. Теперь она читается из локального хранилища при входе
+  // и дописывается при каждой отправке.
+  const chatId = chatIdFor({ chatId: route?.params?.chatId, name });
+  useEffect(() => {
+    let alive = true;
+    loadMessages(chatId).then((saved) => {
+      if (alive && saved.length) setMessages(saved);
+    });
+    return () => { alive = false; };
+  }, [chatId]);
   const feedRef = useRef(null);
   const [viewerImage, setViewerImage] = useState(null);
   // Фото, выбранное, но ещё не отправленное — показываем превью над полем
@@ -50,10 +64,20 @@ export default function ConversationScreen({ navigation, route }) {
   const send = () => {
     const t = text.trim();
     if (!t && !pendingImage) return;
-    setMessages((m) => [
-      ...m,
-      { id: 'me' + Date.now(), side: 'out', image: pendingImage, text: t || undefined, time: 'сейчас' },
-    ]);
+    const at = Date.now();
+    const msg = { id: 'me' + at, side: 'out', image: pendingImage, text: t || undefined, at };
+    const next = [...messages, msg];
+    setMessages(next);
+    saveMessages(chatId, next);
+    // Диалог поднимается в списке чатов с актуальным последним сообщением.
+    upsertThread({
+      id: chatId,
+      name,
+      rating,
+      phone,
+      last: t || 'Фото',
+      at,
+    });
     setText('');
     setPendingImage(null);
     // Прокручиваем ленту к последнему сообщению
@@ -174,7 +198,7 @@ export default function ConversationScreen({ navigation, route }) {
                   </Text>
                 </View>
               )}
-              <Text style={styles.time}>{m.time}</Text>
+              <Text style={styles.time}>{formatTime(m.at)}</Text>
             </View>
           ))}
         </ScrollView>

@@ -1,23 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, font } from '../theme';
 import { SearchIcon, CheckCircle, TrashIcon } from '../components/Icons';
-
-const initialThreads = [
-  { id: '1', name: 'Алексей',        last: 'Хочу купить, товар в наличии?',        time: 'сейчас', unread: 0, dot: false },
-  { id: '2', name: 'Алексей Иванов', last: 'Привет! Товар в отличном состоянии',  time: '12:30',  unread: 0, dot: true },
-  { id: '3', name: 'Мария С.',       last: 'Договорились, оформляйте сделку',      time: '11:05',  unread: 2, dot: false },
-  { id: '4', name: 'Дмитрий К.',     last: 'Могу скинуть ещё фото',                time: 'Вчера',  unread: 0, dot: false },
-  { id: '5', name: 'Сергей П.',      last: '✅ Вы договорились о сделке',          time: '09:14',  unread: 0, dot: false },
-];
+import { loadThreads, deleteThreads, saveThreads, formatTime } from '../storage/chatStorage';
 
 export default function ChatScreen({ navigation }) {
   const [query, setQuery] = useState('');
-  const [threads, setThreads] = useState(initialThreads);
+  // Список собирается из реальных диалогов в локальном хранилище. Раньше тут
+  // лежали выдуманные собеседники, из-за чего чат выглядел работающим, хотя
+  // ни одного настоящего сообщения в нём не было.
+  const [threads, setThreads] = useState([]);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      loadThreads().then((list) => { if (alive) setThreads(list); });
+      return () => { alive = false; };
+    }, []),
+  );
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
-  const data = threads.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const data = threads.filter((t) => (t.name || '').toLowerCase().includes(query.trim().toLowerCase()));
 
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -35,12 +39,16 @@ export default function ChatScreen({ navigation }) {
 
   const handleRowPress = (item) => {
     if (selectMode) toggleSelected(item.id);
-    else navigation.navigate('Conversation', { name: item.name });
+    else navigation.navigate('Conversation', {
+      chatId: item.id, name: item.name, rating: item.rating, phone: item.phone,
+    });
   };
 
   const markSelectedRead = () => {
     if (selectedIds.length === 0) return;
-    setThreads((prev) => prev.map((t) => (selectedIds.includes(t.id) ? { ...t, unread: 0, dot: false } : t)));
+    const next = threads.map((t) => (selectedIds.includes(t.id) ? { ...t, unread: 0, dot: false } : t));
+    setThreads(next);
+    saveThreads(next);
     exitSelectMode();
   };
 
@@ -55,7 +63,9 @@ export default function ChatScreen({ navigation }) {
           text: 'Удалить',
           style: 'destructive',
           onPress: () => {
-            setThreads((prev) => prev.filter((t) => !selectedIds.includes(t.id)));
+            const ids = selectedIds;
+            setThreads(threads.filter((t) => !ids.includes(t.id)));
+            deleteThreads(ids);
             exitSelectMode();
           },
         },
@@ -90,7 +100,17 @@ export default function ChatScreen({ navigation }) {
         keyExtractor={(t) => t.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingHorizontal: spacing.lg }}
+        contentContainerStyle={[
+          { paddingHorizontal: spacing.lg },
+          data.length === 0 && styles.emptyWrap,
+        ]}
+        ListEmptyComponent={(
+          <Text style={styles.empty}>
+            {query.trim()
+              ? 'Ничего не найдено'
+              : 'Пока нет переписок. Напишите продавцу со страницы товара — диалог появится здесь.'}
+          </Text>
+        )}
         renderItem={({ item }) => {
           const checked = selectedIds.includes(item.id);
           return (
@@ -102,14 +122,14 @@ export default function ChatScreen({ navigation }) {
               )}
               <View style={styles.avatarWrap}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{item.name[0]}</Text>
+                  <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase() || '?'}</Text>
                 </View>
                 {item.dot && <View style={styles.redDot} />}
               </View>
               <View style={styles.rowBody}>
                 <View style={styles.rowTop}>
                   <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.time}>{item.time}</Text>
+                  <Text style={styles.time}>{formatTime(item.at)}</Text>
                 </View>
                 <View style={styles.rowBottom}>
                   <Text style={styles.last} numberOfLines={1}>{item.last}</Text>
@@ -167,6 +187,12 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg, paddingHorizontal: spacing.md, marginBottom: spacing.sm,
   },
   input: { flex: 1, color: colors.text, fontSize: font.sizeMD, paddingVertical: spacing.md },
+
+  emptyWrap: { flexGrow: 1, justifyContent: 'center' },
+  empty: {
+    color: colors.textMuted, fontSize: font.sizeMD,
+    textAlign: 'center', lineHeight: 24, paddingHorizontal: spacing.lg,
+  },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   checkboxWrap: { width: 22, height: 22 },
