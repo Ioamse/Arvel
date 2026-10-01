@@ -1,0 +1,49 @@
+name: Чек-лист (автотесты)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checklist:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scr/arvel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scr/arvel/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test
+
+      # Скачивает актуальный чек-лист из Google Sheets, сопоставляет пункты с
+      # тестами и падает, если какой-то пункт сломан или остался без теста.
+      # В группу пишет только для Main и ручного запуска — иначе каждый пуш в
+      # любую ветку слал бы отчёт. Токен и chat_id — только из GitHub Secrets.
+      - name: Отчёт по чек-листу
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SEND_TELEGRAM: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/Main') || github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$SEND_TELEGRAM" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            npm run checklist:tg
+          else
+            npm run checklist
+          fi
+
+      - name: Отчёт по пунктам чек-листа
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checklist-report
+          path: scr/arvel/checklist-report.csv
