@@ -119,8 +119,10 @@ export default function AdminPanelScreen({ navigation }) {
       .finally(() => setUsersLoading(false));
   }, []);
 
-  useEffect(() => { loadInvites(); }, [loadInvites]);
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  // Не-админу экран показывает только «нет прав» — запросы к /admin/* уходить
+  // не должны вовсе, даже если сервер всё равно ответил бы отказом.
+  useEffect(() => { if (isAdmin) loadInvites(); }, [isAdmin, loadInvites]);
+  useEffect(() => { if (isAdmin) loadUsers(); }, [isAdmin, loadUsers]);
 
   const revokeInvite = (id) => {
     revokeSellerInvite(id)

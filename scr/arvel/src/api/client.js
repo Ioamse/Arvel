@@ -131,24 +131,41 @@ export async function request(path, { method = 'GET', body, auth = true, retry =
   // сервер за NAT в другой сети) подвешивал fetch на неопределённое время —
   // экран так и оставался в состоянии "загрузка" без единой подсказки, что
   // пошло не так.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const send = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      return await fetch(`${API_BASE_URL}${path}`, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
 
+  // Сервер сейчас отвечает через раз, и после таймаута вторая попытка
+  // обычно проходит. Повторяем только GET: он ничего не меняет на сервере,
+  // а POST/PATCH мог дойти, и повтор создал бы дубль.
   let res;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-  } catch (e) {
-    if (e.name === 'AbortError') {
-      throw new ApiError({ status: 0, code: 'TIMEOUT', detail: `Сервер не отвечает: ${API_BASE_URL}${path}` });
+    try {
+      res = await send();
+    } catch (e) {
+      if (e.name !== 'AbortError' || method !== 'GET') throw e;
+      console.warn(`[api] таймаут ${method} ${API_BASE_URL}${path}, повторяем`);
+      res = await send();
     }
-    throw new ApiError({ status: 0, code: 'NETWORK_ERROR', detail: `Не удалось подключиться к ${API_BASE_URL}: ${e.message}` });
-  } finally {
-    clearTimeout(timeout);
+  } catch (e) {
+    // Адрес сервера пользователю не показываем — только в лог.
+    if (e.name === 'AbortError') {
+      console.warn(`[api] сервер не отвечает: ${method} ${API_BASE_URL}${path}`);
+      throw new ApiError({ status: 0, code: 'TIMEOUT', detail: 'Сервер не отвечает, попробуйте позже' });
+    }
+    console.warn(`[api] нет связи с ${API_BASE_URL}${path}: ${e.message}`);
+    throw new ApiError({ status: 0, code: 'NETWORK_ERROR', detail: 'Нет связи с сервером, проверьте интернет' });
   }
 
   // Пока запрос был в полёте, пользователь мог войти под другим аккаунтом.

@@ -42,13 +42,10 @@ arvell/
     │   ├── CartScreen.js
     │   └── AccountScreen.js       // профиль во вкладке + кнопка «Выйти»
     │
-    ├── components/              // переиспользуемые кусочки UI
-    │   ├── Logo.js
-    │   ├── ShieldIcon.js
-    │   └── ProductCard.js
-    │
-    └── data/
-        └── products.js          // моковые товары (потом заменишь на сервер)
+    └── components/              // переиспользуемые кусочки UI
+        ├── Logo.js
+        ├── ShieldIcon.js
+        └── ProductCard.js
 ```
 
 ## Как это работает
@@ -68,5 +65,4 @@ arvell/
 - Заменить заглушки в `assets/` своими иконками.
 - В `FeedScreen` сделать переход на экран товара (добавить `ProductDetailScreen`
   и обернуть ленту в стек, как сделано в AuthNavigator).
-- Подключить реальные данные в `data/products.js`.
 - Заменить эмодзи-иконки табов на `@expo/vector-icons`.
