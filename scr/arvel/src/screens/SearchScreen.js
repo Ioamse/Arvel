@@ -117,7 +117,7 @@ export default function SearchScreen({ navigation }) {
               справа от поля; крестик внутри поля стирает сразу, без бэкспейса
               по букве и привычнее (как в iOS/Android поиске). */}
           {query.length > 0 && (
-            <Pressable hitSlop={10} onPress={() => setQuery('')}>
+            <Pressable hitSlop={10} accessibilityLabel="Очистить поиск" onPress={() => setQuery('')}>
               <CloseIcon size={16} color={colors.textMuted} />
             </Pressable>
           )}
@@ -192,7 +192,7 @@ export default function SearchScreen({ navigation }) {
                     <ClockIcon size={20} />
                     <Text style={styles.recentText}>{item}</Text>
                   </Pressable>
-                  <Pressable hitSlop={10} onPress={() => removeRecent(item)}>
+                  <Pressable hitSlop={10} accessibilityLabel="Удалить из недавних" onPress={() => removeRecent(item)}>
                     <CloseIcon size={20} />
                   </Pressable>
                 </View>

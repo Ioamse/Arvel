@@ -20,7 +20,7 @@ function Row({ title, subtitle, value, onValueChange, last }) {
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowSub}>{subtitle}</Text>
       </View>
-      <Toggle value={value} onValueChange={onValueChange} />
+      <Toggle value={value} onValueChange={onValueChange} accessibilityLabel={title} />
     </View>
   );
 }
@@ -58,7 +58,7 @@ export default function NotificationsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}><BackIcon size={26} /></Pressable>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}><BackIcon size={26} /></Pressable>
         <Text style={styles.headerTitle}>Уведомления</Text>
         <View style={{ width: 26 }} />
       </View>

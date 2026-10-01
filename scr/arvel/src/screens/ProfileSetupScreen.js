@@ -196,7 +196,7 @@ export default function ProfileSetupScreen({ navigation }) {
       <KeyboardAware dismissOnTap={false}>
       {/* Шапка: назад слева, заголовок белым по центру — как на макете */}
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => { if (!finishedRef.current) navigation.goBack(); }}>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => { if (!finishedRef.current) navigation.goBack(); }}>
           <BackIcon />
         </Pressable>
         <Text style={styles.headerTitle}>Регистрация</Text>
@@ -213,7 +213,7 @@ export default function ProfileSetupScreen({ navigation }) {
         <Text style={styles.sub}>Как вас будут видеть другие пользователи</Text>
 
         {/* Аватар по центру с жёлтым бейджем камеры */}
-        <Pressable style={styles.avatarWrap} onPress={onAvatarPress}>
+        <Pressable style={styles.avatarWrap} accessibilityLabel="Выбрать фото профиля" onPress={onAvatarPress}>
           {avatar ? (
             <Image source={{ uri: avatar.uri }} style={styles.avatarImage} />
           ) : (

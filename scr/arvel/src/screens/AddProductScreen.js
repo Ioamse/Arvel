@@ -273,7 +273,7 @@ export default function AddProductScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}><BackIcon size={26} /></Pressable>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}><BackIcon size={26} /></Pressable>
         <Text style={styles.headerTitle}>Новый товар</Text>
         <View style={{ width: 26 }} />
       </View>
@@ -316,13 +316,13 @@ export default function AddProductScreen({ navigation }) {
                   <Text style={styles.mainBadgeText}>ГЛАВНОЕ</Text>
                 </View>
               )}
-              <Pressable style={styles.removeBtn} hitSlop={8} onPress={() => removePhoto(p.uri)}>
+              <Pressable style={styles.removeBtn} hitSlop={8} accessibilityLabel="Удалить фото" onPress={() => removePhoto(p.uri)}>
                 <CloseIcon size={12} color={colors.text} />
               </Pressable>
             </View>
           ))}
           {photos.length < maxImages && (
-            <Pressable style={[styles.photoBox, styles.photoBoxEmpty]} onPress={addPhotos}>
+            <Pressable style={[styles.photoBox, styles.photoBoxEmpty]} accessibilityLabel="Добавить фото" onPress={addPhotos}>
               <CameraIcon size={22} color={colors.accent} />
               {photos.length === 0 && <Text style={styles.photoHint}>главное</Text>}
             </Pressable>

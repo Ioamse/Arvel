@@ -35,7 +35,7 @@ export default function ShopScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
           <BackIcon size={24} />
         </Pressable>
         <View style={{ flex: 1 }}>

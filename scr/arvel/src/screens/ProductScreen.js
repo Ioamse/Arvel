@@ -88,7 +88,7 @@ export default function ProductScreen({ navigation, route }) {
     return (
       <View style={[styles.safe, styles.center]}>
         <SafeAreaView edges={['top']} style={styles.errorHeader}>
-          <Pressable style={styles.roundBtn} hitSlop={8} onPress={() => navigation.goBack()}>
+          <Pressable style={styles.roundBtn} hitSlop={8} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
             <BackIcon size={22} />
           </Pressable>
         </SafeAreaView>
@@ -130,14 +130,14 @@ export default function ProductScreen({ navigation, route }) {
           )}
 
           <SafeAreaView edges={['top']} style={styles.photoBar}>
-            <Pressable style={styles.roundBtn} hitSlop={8} onPress={() => navigation.goBack()}>
+            <Pressable style={styles.roundBtn} hitSlop={8} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
               <BackIcon size={22} />
             </Pressable>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Pressable style={styles.roundBtn} hitSlop={8} onPress={onLikePress}>
+              <Pressable style={styles.roundBtn} hitSlop={8} accessibilityLabel="В избранное" onPress={onLikePress}>
                 <HeartIcon size={20} color={liked ? colors.accent : colors.text} filled={liked} />
               </Pressable>
-              <Pressable style={styles.roundBtn} hitSlop={8} onPress={onSharePress}>
+              <Pressable style={styles.roundBtn} hitSlop={8} accessibilityLabel="Поделиться" onPress={onSharePress}>
                 <ShareIcon size={20} />
               </Pressable>
             </View>
@@ -221,7 +221,7 @@ export default function ProductScreen({ navigation, route }) {
             <Pressable style={styles.buyBtn} onPress={() => openConversation(true)}>
               <Text style={styles.buyText}>Купить</Text>
             </Pressable>
-            <Pressable style={styles.chatBtn} onPress={() => openConversation(false)}>
+            <Pressable style={styles.chatBtn} accessibilityLabel="Написать продавцу" onPress={() => openConversation(false)}>
               <ChatIcon size={24} color={colors.text} />
             </Pressable>
           </>

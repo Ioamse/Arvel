@@ -85,7 +85,7 @@ export default function VerifyScreen({ navigation, route }) {
     <SafeAreaView style={styles.safe}>
       <KeyboardAware>
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
           <BackIcon />
         </Pressable>
         <Text style={styles.headerTitle}>Подтверждение</Text>

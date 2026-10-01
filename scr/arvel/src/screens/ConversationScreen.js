@@ -156,7 +156,7 @@ export default function ConversationScreen({ navigation, route }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Шапка */}
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
           <BackIcon size={24} />
         </Pressable>
         <View style={styles.avatar}>
@@ -174,7 +174,7 @@ export default function ConversationScreen({ navigation, route }) {
             выглядело как сломанная функция. Скрываем её до появления
             номера в API, а не оставляем нерабочей. */}
         {!!phone && (
-          <Pressable hitSlop={8} onPress={onCallPress}>
+          <Pressable hitSlop={8} accessibilityLabel="Позвонить" onPress={onCallPress}>
             <PhoneCallIcon size={22} color={colors.textMuted} />
           </Pressable>
         )}
@@ -227,7 +227,7 @@ export default function ConversationScreen({ navigation, route }) {
               <View key={m.id} style={{ alignItems: mine ? 'flex-end' : 'flex-start' }}>
                 {imageUri ? (
                   <View style={styles.imageMsg}>
-                    <Pressable onPress={() => setViewerImage(imageUri)}>
+                    <Pressable accessibilityLabel="Открыть фото" onPress={() => setViewerImage(imageUri)}>
                       <Image source={{ uri: imageUri }} style={styles.bubbleImage} />
                     </Pressable>
                   </View>
@@ -249,13 +249,13 @@ export default function ConversationScreen({ navigation, route }) {
           {pendingImage && (
             <View style={styles.previewRow}>
               <Image source={{ uri: pendingImage }} style={styles.previewImage} />
-              <Pressable hitSlop={8} style={styles.previewRemove} onPress={() => setPendingImage(null)}>
+              <Pressable hitSlop={8} style={styles.previewRemove} accessibilityLabel="Убрать фото" onPress={() => setPendingImage(null)}>
                 <CloseIcon size={14} color={colors.text} />
               </Pressable>
             </View>
           )}
           <View style={styles.inputBar}>
-            <Pressable hitSlop={8} style={({ pressed }) => [styles.attachBtn, pressed && styles.btnPressed]} onPress={pickImage}>
+            <Pressable hitSlop={8} style={({ pressed }) => [styles.attachBtn, pressed && styles.btnPressed]} accessibilityLabel="Прикрепить фото" onPress={pickImage}>
               <ImageIcon size={22} color={colors.textMuted} />
             </Pressable>
             <View style={styles.inputWrap}>
@@ -274,6 +274,7 @@ export default function ConversationScreen({ navigation, route }) {
                 !text.trim() && !pendingImage && styles.sendBtnDisabled,
                 pressed && styles.btnPressed,
               ]}
+              accessibilityLabel="Отправить"
               onPress={send}
               disabled={(!text.trim() && !pendingImage) || !conversationId || sending}
             >
@@ -300,7 +301,7 @@ export default function ConversationScreen({ navigation, route }) {
             />
           )}
           <SafeAreaView edges={['top']} style={styles.viewerCloseSafe} pointerEvents="box-none">
-            <Pressable hitSlop={10} style={styles.viewerClose} onPress={() => setViewerImage(null)}>
+            <Pressable hitSlop={10} style={styles.viewerClose} accessibilityLabel="Закрыть фото" onPress={() => setViewerImage(null)}>
               <CloseIcon size={20} color={colors.text} />
             </Pressable>
           </SafeAreaView>

@@ -12,7 +12,7 @@ const HEIGHT = 30;
 const PADDING = 2;
 const THUMB = HEIGHT - PADDING * 2;
 
-export default function Toggle({ value, onValueChange, disabled = false }) {
+export default function Toggle({ value, onValueChange, disabled = false, accessibilityLabel }) {
   const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
 
   useEffect(() => {
@@ -38,6 +38,9 @@ export default function Toggle({ value, onValueChange, disabled = false }) {
       onPress={() => onValueChange?.(!value)}
       disabled={disabled}
       hitSlop={8}
+      accessibilityRole="switch"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: !!value, disabled }}
       style={disabled && styles.disabled}
     >
       <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>

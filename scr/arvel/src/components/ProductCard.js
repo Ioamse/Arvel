@@ -54,6 +54,7 @@ export default function ProductCard({ product, onPress }) {
         <Pressable
           style={styles.likeBtn}
           hitSlop={8}
+          accessibilityLabel="В избранное"
           onPress={onLikePress}
         >
           <View style={styles.likeCircle}>

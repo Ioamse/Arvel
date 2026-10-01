@@ -44,7 +44,7 @@ export default function MyListingCard({ product, onPress, onMarkSold, onDelete }
       </View>
 
       <View style={styles.menuWrap}>
-        <Pressable style={styles.menuBtn} hitSlop={8} onPress={() => setMenuOpen((v) => !v)}>
+        <Pressable style={styles.menuBtn} hitSlop={8} accessibilityLabel="Меню объявления" onPress={() => setMenuOpen((v) => !v)}>
           <TrashIcon size={16} color={colors.text} />
         </Pressable>
 

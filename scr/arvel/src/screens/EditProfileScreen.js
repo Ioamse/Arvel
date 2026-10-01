@@ -104,7 +104,7 @@ export default function EditProfileScreen({ navigation }) {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back} accessibilityLabel="Назад">
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Редактирование</Text>
@@ -113,7 +113,7 @@ export default function EditProfileScreen({ navigation }) {
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.avatarBlock}>
-            <TouchableOpacity style={styles.avatar} activeOpacity={0.8} onPress={() => setSheetVisible(true)}>
+            <TouchableOpacity style={styles.avatar} activeOpacity={0.8} accessibilityLabel="Изменить фото профиля" onPress={() => setSheetVisible(true)}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
               ) : (

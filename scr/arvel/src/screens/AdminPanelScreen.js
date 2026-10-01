@@ -147,7 +147,7 @@ export default function AdminPanelScreen({ navigation }) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+          <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
             <BackIcon size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>Админ-панель</Text>
@@ -163,7 +163,7 @@ export default function AdminPanelScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}><BackIcon size={26} /></Pressable>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}><BackIcon size={26} /></Pressable>
         <Text style={styles.headerTitle}>Админ-панель</Text>
         <View style={{ width: 26 }} />
       </View>

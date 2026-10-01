@@ -52,7 +52,7 @@ export default function OrdersScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => navigation.goBack()}>
+        <Pressable hitSlop={10} accessibilityLabel="Назад" onPress={() => navigation.goBack()}>
           <BackIcon size={26} />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
@@ -111,7 +111,7 @@ export default function OrdersScreen({ navigation }) {
                         ? <Image source={{ uri: selected.thumbnail }} style={styles.dealThumb} />
                         : <TeeIcon size={36} />}
                     </View>
-                    <Pressable hitSlop={10} onPress={() => setSelected(null)}>
+                    <Pressable hitSlop={10} accessibilityLabel="Закрыть" onPress={() => setSelected(null)}>
                       <CloseIcon size={20} />
                     </Pressable>
                   </View>
